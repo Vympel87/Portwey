@@ -55,15 +55,23 @@ struct GameDetailView: View {
             }
             .navigationTitle(game.title)
             .confirmationDialog(
-                "Remove \(game.title) from your library?",
+                "Remove \(game.title)?",
                 isPresented: $isConfirmingRemoval
             ) {
-                Button("Remove", role: .destructive) {
+                Button("Remove from Library", role: .destructive) {
                     library.remove(game)
                     dismiss()
                 }
+                if library.isManagedByPortwey(game) {
+                    Button("Remove and Delete Game Files", role: .destructive) {
+                        library.remove(game, deleteGameFiles: true)
+                        dismiss()
+                    }
+                }
             } message: {
-                Text("The game files stay on your Mac.")
+                Text(library.isManagedByPortwey(game)
+                     ? "This game was imported from a .zip, so its files live in Portwey's games folder. You can keep them or delete them too."
+                     : "The game files stay on your Mac.")
             }
         } else {
             ContentUnavailableView("Game not found", systemImage: "questionmark.square.dashed")
@@ -162,11 +170,13 @@ struct GameDetailView: View {
             Button("Show Game in Finder") {
                 NSWorkspace.shared.activateFileViewerSelecting([game.executableURL])
             }
-            Button("Open C: Drive") {
-                openDriveC(for: game)
+            if game.launchMethod == .wine {
+                Button("Open C: Drive") {
+                    openDriveC(for: game)
+                }
             }
             Divider()
-            Button("Remove from Library…", role: .destructive) {
+            Button("Remove…", role: .destructive) {
                 isConfirmingRemoval = true
             }
             .disabled(runner.activeGameID == game.id)
@@ -191,7 +201,7 @@ struct GameDetailView: View {
             ("Engine", game.engine?.displayName ?? "Unknown"),
             ("Runs with", game.launchMethod.displayName),
             ("Graphics", game.launchMethod == .nwjs ? "Metal (native)" : game.graphicsBackend.displayName),
-            ("Bottle", game.launchMethod == .nwjs ? "Not needed" : game.bottleName),
+            ("Bottle", game.launchMethod == .nwjs ? "Not needed" : bottleDisplayName(game.bottleName)),
             ("Executable", game.executablePath)
         ]
 

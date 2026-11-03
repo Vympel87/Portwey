@@ -36,10 +36,22 @@ public final class GameLibrary {
         save()
     }
 
-    public func remove(_ game: Game) {
+    /// Removes the game from the library.
+    /// With `deleteGameFiles`, also deletes its folder if Portwey extracted it (from a .zip) into its games folder.
+    /// A game's own bottle is deleted too once no other game uses it.
+    public func remove(_ game: Game, deleteGameFiles: Bool = false) {
+        if deleteGameFiles, let folder = managedFolder(for: game) {
+            try? FileManager.default.removeItem(at: folder)
+        }
+
         deleteImageFile(named: game.coverFileName)
         deleteImageFile(named: game.iconFileName)
         games.removeAll { $0.id == game.id }
+
+        if game.bottleName != BottleManager.defaultBottleName,
+           !games.contains(where: { $0.bottleName == game.bottleName }) {
+            try? FileManager.default.removeItem(at: BottleManager.bottleURL(named: game.bottleName))
+        }
         save()
     }
 
@@ -47,6 +59,26 @@ public final class GameLibrary {
         guard let index = games.firstIndex(where: { $0.id == gameID }) else { return }
         games[index].graphicsBackend = backend
         save()
+    }
+
+    // MARK: - Queries
+
+    /// True when the game's files live in Portwey's own games folder (imported from a .zip).
+    public func isManagedByPortwey(_ game: Game) -> Bool {
+        managedFolder(for: game) != nil
+    }
+
+    public func games(usingBottle name: String) -> [Game] {
+        games.filter { $0.bottleName == name }
+    }
+
+    /// The top-level folder inside Portwey's games folder that holds this game.
+    private func managedFolder(for game: Game) -> URL? {
+        let root = AppPaths.games.path + "/"
+        guard game.executablePath.hasPrefix(root) else { return nil }
+        let relative = game.executablePath.dropFirst(root.count)
+        guard let first = relative.split(separator: "/").first else { return nil }
+        return AppPaths.games.appendingPathComponent(String(first), isDirectory: true)
     }
 
     // MARK: - Engine detection

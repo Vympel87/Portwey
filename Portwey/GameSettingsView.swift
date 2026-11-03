@@ -11,6 +11,7 @@ struct GameSettingsView: View {
     @State private var title: String
     @State private var launchMethod: LaunchMethod
     @State private var backend: GraphicsBackend
+    @State private var useOwnBottle: Bool
     @State private var argumentsText: String
     @State private var envRows: [EnvRow]
 
@@ -20,6 +21,7 @@ struct GameSettingsView: View {
         _title = State(initialValue: game.title)
         _launchMethod = State(initialValue: game.launchMethod)
         _backend = State(initialValue: game.graphicsBackend)
+        _useOwnBottle = State(initialValue: game.bottleName != BottleManager.defaultBottleName)
         _argumentsText = State(initialValue: ArgumentsFormatter.join(game.arguments))
         _envRows = State(initialValue: game.environment
             .sorted { $0.key < $1.key }
@@ -57,6 +59,24 @@ struct GameSettingsView: View {
                         .frame(maxWidth: 420)
 
                         Text("\(engine?.displayName ?? "This game") runs natively on macOS through NW.js: no Wine, no Rosetta and better performance. Switch to Wine only if the native version has problems.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding(8)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }
+
+            if launchMethod == .wine {
+                GroupBox("Windows environment") {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Picker("Bottle", selection: $useOwnBottle) {
+                            Text("Shared with other games").tag(false)
+                            Text("Own bottle for this game").tag(true)
+                        }
+                        .frame(maxWidth: 420)
+
+                        Text("An own bottle keeps this game's settings and Windows components separate, so problems can't affect other games. It uses more disk space. Saves stored inside the previous bottle don't move over.")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
@@ -137,6 +157,7 @@ struct GameSettingsView: View {
         .onChange(of: title) { save() }
         .onChange(of: launchMethod) { save() }
         .onChange(of: backend) { save() }
+        .onChange(of: useOwnBottle) { save() }
         .onChange(of: argumentsText) { save() }
         .onChange(of: envRows) { save() }
     }
@@ -152,6 +173,9 @@ struct GameSettingsView: View {
         }
         game.launchMethod = launchMethod
         game.graphicsBackend = backend
+        game.bottleName = useOwnBottle
+            ? BottleManager.ownBottleName(for: gameID)
+            : BottleManager.defaultBottleName
         game.arguments = ArgumentsFormatter.split(argumentsText)
 
         var environment: [String: String] = [:]

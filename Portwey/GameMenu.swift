@@ -37,8 +37,10 @@ struct GameMenuItems: View {
         Button("Show in Finder") {
             NSWorkspace.shared.activateFileViewerSelecting([game.executableURL])
         }
-        Button("Open C: Drive") {
-            openDriveC(for: game)
+        if game.launchMethod == .wine {
+            Button("Open C: Drive") {
+                openDriveC(for: game)
+            }
         }
 
         Divider()
@@ -47,7 +49,28 @@ struct GameMenuItems: View {
             library.remove(game)
         }
         .disabled(runner.activeGameID == game.id)
+
+        if library.isManagedByPortwey(game) {
+            Button("Delete Game Files…", role: .destructive) {
+                if confirmDeleteGameFiles(for: game) {
+                    library.remove(game, deleteGameFiles: true)
+                }
+            }
+            .disabled(runner.activeGameID == game.id)
+        }
     }
+}
+
+@MainActor
+func confirmDeleteGameFiles(for game: Game) -> Bool {
+    let alert = NSAlert()
+    alert.messageText = "Delete \(game.title)?"
+    alert.informativeText = "The game is removed from your library and its files are deleted from Portwey's games folder. This can't be undone."
+    alert.alertStyle = .warning
+    alert.addButton(withTitle: "Delete")
+    alert.addButton(withTitle: "Cancel")
+    alert.buttons.first?.hasDestructiveAction = true
+    return alert.runModal() == .alertFirstButtonReturn
 }
 
 @MainActor

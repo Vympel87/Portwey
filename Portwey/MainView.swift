@@ -3,6 +3,7 @@ import LauncherCore
 
 enum SidebarItem: Hashable {
     case library
+    case bottles
     case runtimes
 }
 
@@ -15,6 +16,8 @@ struct MainView: View {
                 Section("Portwey") {
                     Label("Library", systemImage: "square.grid.2x2")
                         .tag(SidebarItem.library)
+                    Label("Bottles", systemImage: "shippingbox")
+                        .tag(SidebarItem.bottles)
                     Label("Runtimes", systemImage: "cpu")
                         .tag(SidebarItem.runtimes)
                 }
@@ -28,6 +31,8 @@ struct MainView: View {
             switch selection ?? .library {
             case .library:
                 LibraryView()
+            case .bottles:
+                BottlesView()
             case .runtimes:
                 RuntimesView()
             }
@@ -44,14 +49,9 @@ private struct NowPlayingView: View {
     var body: some View {
         if let id = runner.activeGameID, let game = library.games.first(where: { $0.id == id }) {
             HStack(spacing: 10) {
-                RoundedRectangle(cornerRadius: 6)
-                    .fill(LinearGradient(colors: game.coverColors, startPoint: .topLeading, endPoint: .bottomTrailing))
+                GameCoverView(game: game, iconSize: 10)
                     .frame(width: 32, height: 32)
-                    .overlay(
-                        Image(systemName: "gamecontroller.fill")
-                            .font(.caption)
-                            .foregroundStyle(.white)
-                    )
+                    .clipShape(RoundedRectangle(cornerRadius: 6))
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(runner.isRunning(id) ? "Now playing" : "Starting…")
