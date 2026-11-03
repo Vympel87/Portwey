@@ -314,39 +314,3 @@ private struct GameCard: View {
         ]
     }
 }
-
-// MARK: - Log panel
-
-private struct LogPanel: View {
-    let lines: [String]
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Text("Logs")
-                    .font(.headline)
-                Spacer()
-                Button("Copy All") {
-                    NSPasteboard.general.clearContents()
-                    NSPasteboard.general.setString(lines.joined(separator: "\n"), forType: .string)
-                }
-                .disabled(lines.isEmpty)
-            }
-
-            ScrollView {
-                LazyVStack(alignment: .leading, spacing: 2) {
-                    ForEach(Array(lines.enumerated()), id: \.offset) { _, line in
-                        Text(line)
-                            .font(.system(.caption, design: .monospaced))
-                            .textSelection(.enabled)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                    }
-                }
-                .padding(10)
-            }
-            .defaultScrollAnchor(.bottom)
-            .frame(height: 200)
-            .background(.black.opacity(0.25), in: RoundedRectangle(cornerRadius: 10))
-        }
-    }
-}
