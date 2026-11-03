@@ -26,6 +26,7 @@ public struct Game: Codable, Identifiable, Sendable, Hashable {
     public var title: String
     public var executablePath: String
     public var arguments: [String]
+    public var environment: [String: String]
     public var bottleName: String
     public var graphicsBackend: GraphicsBackend
     public var addedAt: Date
@@ -37,6 +38,7 @@ public struct Game: Codable, Identifiable, Sendable, Hashable {
         title: String,
         executablePath: String,
         arguments: [String] = [],
+        environment: [String: String] = [:],
         bottleName: String = BottleManager.defaultBottleName,
         graphicsBackend: GraphicsBackend = .dxvk,
         addedAt: Date = Date(),
@@ -47,6 +49,7 @@ public struct Game: Codable, Identifiable, Sendable, Hashable {
         self.title = title
         self.executablePath = executablePath
         self.arguments = arguments
+        self.environment = environment
         self.bottleName = bottleName
         self.graphicsBackend = graphicsBackend
         self.addedAt = addedAt
@@ -57,7 +60,7 @@ public struct Game: Codable, Identifiable, Sendable, Hashable {
     // MARK: - Codable (tolerant of older library.json files)
 
     private enum CodingKeys: String, CodingKey {
-        case id, title, executablePath, arguments, bottleName, graphicsBackend, addedAt, lastPlayedAt, playtimeSeconds
+        case id, title, executablePath, arguments, environment, bottleName, graphicsBackend, addedAt, lastPlayedAt, playtimeSeconds
     }
 
     public init(from decoder: Decoder) throws {
@@ -66,6 +69,7 @@ public struct Game: Codable, Identifiable, Sendable, Hashable {
         title = try container.decode(String.self, forKey: .title)
         executablePath = try container.decode(String.self, forKey: .executablePath)
         arguments = try container.decodeIfPresent([String].self, forKey: .arguments) ?? []
+        environment = try container.decodeIfPresent([String: String].self, forKey: .environment) ?? [:]
         bottleName = try container.decodeIfPresent(String.self, forKey: .bottleName) ?? BottleManager.defaultBottleName
         graphicsBackend = try container.decodeIfPresent(GraphicsBackend.self, forKey: .graphicsBackend) ?? .dxvk
         addedAt = try container.decodeIfPresent(Date.self, forKey: .addedAt) ?? Date()

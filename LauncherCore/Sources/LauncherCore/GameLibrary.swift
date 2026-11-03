@@ -25,6 +25,13 @@ public final class GameLibrary {
         return game
     }
 
+    public func update(_ game: Game) {
+        guard let index = games.firstIndex(where: { $0.id == game.id }) else { return }
+        games[index] = game
+        sortGames()
+        save()
+    }
+
     public func remove(_ game: Game) {
         games.removeAll { $0.id == game.id }
         save()

@@ -65,6 +65,15 @@ public final class GameRunner {
                 log("Graphics: WineD3D (OpenGL)")
             }
 
+            // Per-game custom environment variables win over the defaults above.
+            extraEnvironment.merge(game.environment) { _, custom in custom }
+            if !game.environment.isEmpty {
+                log("Custom environment: \(game.environment.keys.sorted().joined(separator: ", "))")
+            }
+            if !game.arguments.isEmpty {
+                log("Arguments: \(game.arguments.joined(separator: " "))")
+            }
+
             let process = Process()
             process.executableURL = launchRuntime.wineBinaryURL
             process.arguments = [game.executablePath] + game.arguments

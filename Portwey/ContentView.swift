@@ -14,7 +14,7 @@ struct ContentView: View {
     var body: some View {
         Group {
             if setup.isReady {
-                LibraryView()
+                MainView()
             } else {
                 OnboardingView()
             }
