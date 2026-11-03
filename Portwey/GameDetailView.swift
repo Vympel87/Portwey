@@ -76,15 +76,9 @@ struct GameDetailView: View {
         let status = GameStatus(game: game, runner: runner)
 
         return ZStack(alignment: .bottomLeading) {
-            LinearGradient(colors: game.coverColors, startPoint: .topLeading, endPoint: .bottomTrailing)
+            GameCoverView(game: game, iconSize: 120, iconOpacity: 0.15)
 
-            Image(systemName: "gamecontroller.fill")
-                .font(.system(size: 140))
-                .foregroundStyle(.white.opacity(0.12))
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)
-                .padding(.trailing, 40)
-
-            LinearGradient(colors: [.clear, .black.opacity(0.6)], startPoint: .top, endPoint: .bottom)
+            LinearGradient(colors: [.clear, .black.opacity(0.7)], startPoint: .top, endPoint: .bottom)
 
             VStack(alignment: .leading, spacing: 12) {
                 Text(game.title)
@@ -155,13 +149,20 @@ struct GameDetailView: View {
 
     private func moreMenu(for game: Game) -> some View {
         Menu {
+            Button("Change Cover…") {
+                chooseCoverImage(for: game, library: library)
+            }
+            if game.coverFileName != nil {
+                Button("Remove Cover") {
+                    library.removeCover(for: game.id)
+                }
+            }
+            Divider()
             Button("Show Game in Finder") {
                 NSWorkspace.shared.activateFileViewerSelecting([game.executableURL])
             }
             Button("Open C: Drive") {
-                let driveC = BottleManager.bottleURL(named: game.bottleName)
-                    .appendingPathComponent("drive_c", isDirectory: true)
-                NSWorkspace.shared.open(driveC)
+                openDriveC(for: game)
             }
             Divider()
             Button("Remove from Library…", role: .destructive) {

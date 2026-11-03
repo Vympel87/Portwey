@@ -1,21 +1,19 @@
 import SwiftUI
 import LauncherCore
 
-struct GameCard: View {
+struct GameCard<MenuContent: View>: View {
     let game: Game
     let status: GameStatus
     let canPlay: Bool
     let onPlay: () -> Void
+    @ViewBuilder let menuContent: () -> MenuContent
 
     @State private var isHovering = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            ZStack {
-                LinearGradient(colors: game.coverColors, startPoint: .topLeading, endPoint: .bottomTrailing)
-                Image(systemName: "gamecontroller.fill")
-                    .font(.system(size: 40))
-                    .foregroundStyle(.white.opacity(0.85))
+            ZStack(alignment: .topTrailing) {
+                GameCoverView(game: game)
 
                 if isHovering && canPlay {
                     Color.black.opacity(0.35)
@@ -28,9 +26,28 @@ struct GameCard: View {
                     }
                     .buttonStyle(.plain)
                     .help("Play")
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
+
+                // Always-visible "more" button, so people don't have to discover right-click.
+                Menu {
+                    menuContent()
+                } label: {
+                    Image(systemName: "ellipsis")
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundStyle(.white)
+                        .frame(width: 28, height: 28)
+                        .background(.black.opacity(0.45), in: Circle())
+                }
+                .menuStyle(.button)
+                .buttonStyle(.plain)
+                .menuIndicator(.hidden)
+                .fixedSize()
+                .padding(8)
+                .help("More options")
             }
             .frame(height: 140)
+            .clipped()
 
             VStack(alignment: .leading, spacing: 10) {
                 Text(game.title)

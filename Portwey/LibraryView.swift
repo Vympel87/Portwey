@@ -121,33 +121,16 @@ struct LibraryView: View {
                 GameCard(
                     game: game,
                     status: GameStatus(game: game, runner: runner),
-                    canPlay: !runner.isBusy && game.executableExists && setup.runtime != nil
+                    canPlay: !runner.isBusy && game.executableExists && setup.runtime != nil,
+                    onPlay: { playGame(game, runner: runner, setup: setup) }
                 ) {
-                    playGame(game, runner: runner, setup: setup)
+                    GameMenuItems(game: game, onOpenDetails: { path.append(game.id) })
                 }
                 .onTapGesture {
                     path.append(game.id)
                 }
                 .contextMenu {
-                    Button("Play") {
-                        playGame(game, runner: runner, setup: setup)
-                    }
-                    .disabled(runner.isBusy || !game.executableExists)
-
-                    Button("Open Details") {
-                        path.append(game.id)
-                    }
-
-                    Button("Show in Finder") {
-                        NSWorkspace.shared.activateFileViewerSelecting([game.executableURL])
-                    }
-
-                    Divider()
-
-                    Button("Remove from Library", role: .destructive) {
-                        library.remove(game)
-                    }
-                    .disabled(runner.activeGameID == game.id)
+                    GameMenuItems(game: game, onOpenDetails: { path.append(game.id) })
                 }
             }
         }
