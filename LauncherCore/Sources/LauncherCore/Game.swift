@@ -29,6 +29,8 @@ public struct Game: Codable, Identifiable, Sendable, Hashable {
     public var environment: [String: String]
     public var bottleName: String
     public var graphicsBackend: GraphicsBackend
+    public var engine: GameEngine?
+    public var launchMethod: LaunchMethod
     public var coverFileName: String?
     public var iconFileName: String?
     public var addedAt: Date
@@ -43,6 +45,8 @@ public struct Game: Codable, Identifiable, Sendable, Hashable {
         environment: [String: String] = [:],
         bottleName: String = BottleManager.defaultBottleName,
         graphicsBackend: GraphicsBackend = .dxvk,
+        engine: GameEngine? = nil,
+        launchMethod: LaunchMethod = .wine,
         coverFileName: String? = nil,
         iconFileName: String? = nil,
         addedAt: Date = Date(),
@@ -56,6 +60,8 @@ public struct Game: Codable, Identifiable, Sendable, Hashable {
         self.environment = environment
         self.bottleName = bottleName
         self.graphicsBackend = graphicsBackend
+        self.engine = engine
+        self.launchMethod = launchMethod
         self.coverFileName = coverFileName
         self.iconFileName = iconFileName
         self.addedAt = addedAt
@@ -67,7 +73,7 @@ public struct Game: Codable, Identifiable, Sendable, Hashable {
 
     private enum CodingKeys: String, CodingKey {
         case id, title, executablePath, arguments, environment, bottleName, graphicsBackend
-        case coverFileName, iconFileName, addedAt, lastPlayedAt, playtimeSeconds
+        case engine, launchMethod, coverFileName, iconFileName, addedAt, lastPlayedAt, playtimeSeconds
     }
 
     public init(from decoder: Decoder) throws {
@@ -79,6 +85,8 @@ public struct Game: Codable, Identifiable, Sendable, Hashable {
         environment = try container.decodeIfPresent([String: String].self, forKey: .environment) ?? [:]
         bottleName = try container.decodeIfPresent(String.self, forKey: .bottleName) ?? BottleManager.defaultBottleName
         graphicsBackend = try container.decodeIfPresent(GraphicsBackend.self, forKey: .graphicsBackend) ?? .dxvk
+        engine = try container.decodeIfPresent(GameEngine.self, forKey: .engine)
+        launchMethod = try container.decodeIfPresent(LaunchMethod.self, forKey: .launchMethod) ?? .wine
         coverFileName = try container.decodeIfPresent(String.self, forKey: .coverFileName)
         iconFileName = try container.decodeIfPresent(String.self, forKey: .iconFileName)
         addedAt = try container.decodeIfPresent(Date.self, forKey: .addedAt) ?? Date()

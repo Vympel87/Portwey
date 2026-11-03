@@ -32,6 +32,8 @@ public final class GameRunner {
 
     public func isRunning(_ id: UUID) -> Bool { state == .running(gameID: id) }
 
+    // MARK: - Launch
+
     public func launch(_ game: Game, runtime: RuntimeInfo) async {
         guard state == .idle else { return }
         logs.removeAll()
@@ -43,83 +45,134 @@ public final class GameRunner {
                 throw LauncherError.executableNotFound(game.executablePath)
             }
 
-            let bottle = try await BottleManager.ensureBottle(named: game.bottleName, runtime: runtime) { [weak self] line in
-                Task { @MainActor in self?.log(line) }
+            let process: Process
+            switch game.launchMethod {
+            case .wine:
+                process = try await makeWineProcess(for: game, runtime: runtime)
+            case .nwjs:
+                process = try await makeNWJSProcess(for: game)
             }
 
-            // Graphics backend: DXVK games run on a DXVK copy of Wine, WineD3D games on the original.
-            var launchRuntime = runtime
-            var extraEnvironment: [String: String] = [:]
-            switch game.graphicsBackend {
-            case .dxvk:
-                if let dxvk = DXVKService.installed() {
-                    launchRuntime = try await DXVKService.runtimeVariant(base: runtime, dxvk: dxvk) { [weak self] line in
-                        Task { @MainActor in self?.log(line) }
-                    }
-                    extraEnvironment = DXVKService.environment(for: bottle)
-                    log("Graphics: DXVK \(dxvk.tag)")
-                } else {
-                    log("⚠️ DXVK isn't installed, falling back to WineD3D")
-                }
-            case .wined3d:
-                log("Graphics: WineD3D (OpenGL)")
-            }
-
-            // Per-game custom environment variables win over the defaults above.
-            extraEnvironment.merge(game.environment) { _, custom in custom }
-            if !game.environment.isEmpty {
-                log("Custom environment: \(game.environment.keys.sorted().joined(separator: ", "))")
-            }
-            if !game.arguments.isEmpty {
-                log("Arguments: \(game.arguments.joined(separator: " "))")
-            }
-
-            let process = Process()
-            process.executableURL = launchRuntime.wineBinaryURL
-            process.arguments = [game.executablePath] + game.arguments
-            process.currentDirectoryURL = game.workingDirectoryURL
-            process.environment = BottleManager.environment(for: bottle, extra: extraEnvironment)
-
-            let pipe = Pipe()
-            process.standardOutput = pipe
-            process.standardError = pipe
-            pipe.fileHandleForReading.readabilityHandler = { [weak self] handle in
-                let data = handle.availableData
-                guard !data.isEmpty else {
-                    handle.readabilityHandler = nil
-                    return
-                }
-                let text = String(decoding: data, as: UTF8.self)
-                Task { @MainActor in self?.appendOutput(text) }
-            }
-
-            process.terminationHandler = { [weak self] finished in
-                let exitCode = finished.terminationStatus
-                Task { @MainActor in self?.didTerminate(exitCode: exitCode) }
-            }
-
-            log("Launching \(game.title)…")
-            log("$ WINEPREFIX=\"\(bottle.path)\" \"\(launchRuntime.wineBinaryPath)\" \"\(game.executablePath)\"")
+            attachOutput(to: process)
             try process.run()
 
             self.process = process
             startedAt = Date()
             runningGameID = game.id
-            runningBottle = bottle
-            runningRuntime = launchRuntime
             state = .running(gameID: game.id)
         } catch {
             lastError = error.localizedDescription
             log("❌ \(error.localizedDescription)")
+            runningBottle = nil
+            runningRuntime = nil
             state = .idle
         }
     }
 
     public func stop() async {
-        guard let bottle = runningBottle, let runtime = runningRuntime else { return }
+        guard let process else { return }
         log("Stopping game…")
-        process?.terminate()
-        await BottleManager.killAll(in: bottle, runtime: runtime)
+        process.terminate()
+        if let bottle = runningBottle, let runtime = runningRuntime {
+            await BottleManager.killAll(in: bottle, runtime: runtime)
+        }
+    }
+
+    // MARK: - Wine
+
+    private func makeWineProcess(for game: Game, runtime: RuntimeInfo) async throws -> Process {
+        let bottle = try await BottleManager.ensureBottle(named: game.bottleName, runtime: runtime) { [weak self] line in
+            Task { @MainActor in self?.log(line) }
+        }
+
+        // Graphics backend: DXVK games run on a DXVK copy of Wine, WineD3D games on the original.
+        var launchRuntime = runtime
+        var extraEnvironment: [String: String] = [:]
+        switch game.graphicsBackend {
+        case .dxvk:
+            if let dxvk = DXVKService.installed() {
+                launchRuntime = try await DXVKService.runtimeVariant(base: runtime, dxvk: dxvk) { [weak self] line in
+                    Task { @MainActor in self?.log(line) }
+                }
+                extraEnvironment = DXVKService.environment(for: bottle)
+                log("Graphics: DXVK \(dxvk.tag)")
+            } else {
+                log("⚠️ DXVK isn't installed, falling back to WineD3D")
+            }
+        case .wined3d:
+            log("Graphics: WineD3D (OpenGL)")
+        }
+
+        // Per-game custom environment variables win over the defaults above.
+        extraEnvironment.merge(game.environment) { _, custom in custom }
+        logCustomSettings(for: game)
+
+        let process = Process()
+        process.executableURL = launchRuntime.wineBinaryURL
+        process.arguments = [game.executablePath] + game.arguments
+        process.currentDirectoryURL = game.workingDirectoryURL
+        process.environment = BottleManager.environment(for: bottle, extra: extraEnvironment)
+
+        log("Launching \(game.title) with Wine…")
+        log("$ WINEPREFIX=\"\(bottle.path)\" \"\(launchRuntime.wineBinaryPath)\" \"\(game.executablePath)\"")
+
+        runningBottle = bottle
+        runningRuntime = launchRuntime
+        return process
+    }
+
+    // MARK: - Native NW.js
+
+    private func makeNWJSProcess(for game: Game) async throws -> Process {
+        let nwjs = try await NWJSService.ensureInstalled { [weak self] line in
+            Task { @MainActor in self?.log(line) }
+        }
+
+        let gameRoot = game.workingDirectoryURL
+        try NWJSService.prepareGameFolder(gameRoot, fallbackName: game.title) { line in
+            log(line)
+        }
+        logCustomSettings(for: game)
+
+        // Browsers block audio until the user clicks; games expect music right away.
+        let arguments = ["--autoplay-policy=no-user-gesture-required"] + game.arguments + [gameRoot.path]
+
+        let process = Process()
+        process.executableURL = nwjs.executableURL
+        process.arguments = arguments
+        process.currentDirectoryURL = gameRoot
+        process.environment = ProcessInfo.processInfo.environment
+            .merging(game.environment) { _, custom in custom }
+
+        log("Runner: native NW.js \(nwjs.version) (no Wine, no Rosetta)")
+        log("Launching \(game.title)…")
+        log("$ \"\(nwjs.executableURL.path)\" \(arguments.map { "\"\($0)\"" }.joined(separator: " "))")
+
+        runningBottle = nil
+        runningRuntime = nil
+        return process
+    }
+
+    // MARK: - Process output
+
+    private func attachOutput(to process: Process) {
+        let pipe = Pipe()
+        process.standardOutput = pipe
+        process.standardError = pipe
+        pipe.fileHandleForReading.readabilityHandler = { [weak self] handle in
+            let data = handle.availableData
+            guard !data.isEmpty else {
+                handle.readabilityHandler = nil
+                return
+            }
+            let text = String(decoding: data, as: UTF8.self)
+            Task { @MainActor in self?.appendOutput(text) }
+        }
+
+        process.terminationHandler = { [weak self] finished in
+            let exitCode = finished.terminationStatus
+            Task { @MainActor in self?.didTerminate(exitCode: exitCode) }
+        }
     }
 
     private func didTerminate(exitCode: Int32) {
@@ -134,6 +187,17 @@ public final class GameRunner {
         runningBottle = nil
         runningRuntime = nil
         state = .idle
+    }
+
+    // MARK: - Logging
+
+    private func logCustomSettings(for game: Game) {
+        if !game.environment.isEmpty {
+            log("Custom environment: \(game.environment.keys.sorted().joined(separator: ", "))")
+        }
+        if !game.arguments.isEmpty {
+            log("Arguments: \(game.arguments.joined(separator: " "))")
+        }
     }
 
     private func appendOutput(_ text: String) {

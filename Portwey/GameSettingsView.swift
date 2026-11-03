@@ -6,15 +6,19 @@ struct GameSettingsView: View {
     @Environment(GameRunner.self) private var runner
 
     let gameID: UUID
+    let engine: GameEngine?
 
     @State private var title: String
+    @State private var launchMethod: LaunchMethod
     @State private var backend: GraphicsBackend
     @State private var argumentsText: String
     @State private var envRows: [EnvRow]
 
     init(game: Game) {
         gameID = game.id
+        engine = game.engine
         _title = State(initialValue: game.title)
+        _launchMethod = State(initialValue: game.launchMethod)
         _backend = State(initialValue: game.graphicsBackend)
         _argumentsText = State(initialValue: ArgumentsFormatter.join(game.arguments))
         _envRows = State(initialValue: game.environment
@@ -42,6 +46,25 @@ struct GameSettingsView: View {
                 .padding(8)
             }
 
+            if engine?.supportsNativeNWJS == true {
+                GroupBox("Runs with") {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Picker("Runner", selection: $launchMethod) {
+                            ForEach(LaunchMethod.allCases) { item in
+                                Text(item.displayName).tag(item)
+                            }
+                        }
+                        .frame(maxWidth: 420)
+
+                        Text("\(engine?.displayName ?? "This game") runs natively on macOS through NW.js: no Wine, no Rosetta and better performance. Switch to Wine only if the native version has problems.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding(8)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }
+
             GroupBox("Graphics") {
                 VStack(alignment: .leading, spacing: 6) {
                     Picker("Backend", selection: $backend) {
@@ -50,8 +73,11 @@ struct GameSettingsView: View {
                         }
                     }
                     .frame(maxWidth: 420)
+                    .disabled(launchMethod == .nwjs)
 
-                    Text("DXVK works best for DirectX 10/11 games (most Unity games). Use WineD3D for older DirectX 9 or OpenGL games.")
+                    Text(launchMethod == .nwjs
+                         ? "Not used: native games render with Metal directly."
+                         : "DXVK works best for DirectX 10/11 games (most Unity games). Use WineD3D for older DirectX 9 or OpenGL games.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -63,7 +89,7 @@ struct GameSettingsView: View {
                 VStack(alignment: .leading, spacing: 6) {
                     TextField("Arguments", text: $argumentsText, prompt: Text("-screen-fullscreen 0"))
                         .textFieldStyle(.roundedBorder)
-                    Text("Passed to the game's .exe. Wrap values that contain spaces in quotes.")
+                    Text("Passed to the game when it starts. Wrap values that contain spaces in quotes.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -109,6 +135,7 @@ struct GameSettingsView: View {
         }
         .disabled(isLocked)
         .onChange(of: title) { save() }
+        .onChange(of: launchMethod) { save() }
         .onChange(of: backend) { save() }
         .onChange(of: argumentsText) { save() }
         .onChange(of: envRows) { save() }
@@ -123,6 +150,7 @@ struct GameSettingsView: View {
         if !trimmedTitle.isEmpty {
             game.title = trimmedTitle
         }
+        game.launchMethod = launchMethod
         game.graphicsBackend = backend
         game.arguments = ArgumentsFormatter.split(argumentsText)
 

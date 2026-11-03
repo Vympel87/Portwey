@@ -74,6 +74,7 @@ struct GameDetailView: View {
 
     private func hero(for game: Game) -> some View {
         let status = GameStatus(game: game, runner: runner)
+        let runnerLabel = game.launchMethod == .nwjs ? "Native" : game.graphicsBackend.shortName
 
         return ZStack(alignment: .bottomLeading) {
             GameCoverView(game: game, iconSize: 120, iconOpacity: 0.15)
@@ -90,7 +91,7 @@ struct GameDetailView: View {
                     Circle()
                         .fill(status.color)
                         .frame(width: 8, height: 8)
-                    Text("\(status.label) · \(game.graphicsBackend.shortName)")
+                    Text("\(status.label) · \(runnerLabel)")
                         .foregroundStyle(.white.opacity(0.85))
                 }
                 .font(.callout)
@@ -187,8 +188,10 @@ struct GameDetailView: View {
             ("Playtime", game.playtimeText),
             ("Last played", game.lastPlayedText),
             ("Added", game.addedAt.formatted(date: .abbreviated, time: .omitted)),
-            ("Graphics", game.graphicsBackend.displayName),
-            ("Bottle", game.bottleName),
+            ("Engine", game.engine?.displayName ?? "Unknown"),
+            ("Runs with", game.launchMethod.displayName),
+            ("Graphics", game.launchMethod == .nwjs ? "Metal (native)" : game.graphicsBackend.displayName),
+            ("Bottle", game.launchMethod == .nwjs ? "Not needed" : game.bottleName),
             ("Executable", game.executablePath)
         ]
 

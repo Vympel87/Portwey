@@ -61,6 +61,15 @@ struct GameCard<MenuContent: View>: View {
                     Text(status.label)
                         .font(.caption)
                         .foregroundStyle(.secondary)
+
+                    Spacer(minLength: 4)
+
+                    if game.launchMethod == .nwjs {
+                        badge("Native", color: .green)
+                    }
+                    if let engine = game.engine, engine != .unknown {
+                        badge(engine.displayName, color: .secondary)
+                    }
                 }
             }
             .padding(14)
@@ -75,5 +84,15 @@ struct GameCard<MenuContent: View>: View {
         .animation(.easeOut(duration: 0.15), value: isHovering)
         .contentShape(RoundedRectangle(cornerRadius: 14))
         .onHover { isHovering = $0 }
+    }
+
+    private func badge(_ text: String, color: Color) -> some View {
+        Text(text)
+            .font(.caption2.weight(.semibold))
+            .lineLimit(1)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            .foregroundStyle(color)
+            .background(color.opacity(0.15), in: Capsule())
     }
 }

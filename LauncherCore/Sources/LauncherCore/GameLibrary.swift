@@ -21,6 +21,7 @@ public final class GameLibrary {
         )
         games.append(game)
         if let index = games.indices.last {
+            detectEngine(at: index)
             extractIcon(at: index)
         }
         sortGames()
@@ -46,6 +47,17 @@ public final class GameLibrary {
         guard let index = games.firstIndex(where: { $0.id == gameID }) else { return }
         games[index].graphicsBackend = backend
         save()
+    }
+
+    // MARK: - Engine detection
+
+    /// Detects the engine and picks the best way to run the game.
+    private func detectEngine(at index: Int) {
+        let engine = GameEngineDetector.detect(executable: games[index].executableURL)
+        games[index].engine = engine
+        if engine.supportsNativeNWJS {
+            games[index].launchMethod = .nwjs
+        }
     }
 
     // MARK: - Covers & icons
@@ -124,10 +136,14 @@ public final class GameLibrary {
             return
         }
 
-        // Give games added before icon support their icon.
+        // Fill in things older library entries don't have yet.
         var changed = false
-        for index in games.indices where games[index].iconFileName == nil {
-            if extractIcon(at: index) {
+        for index in games.indices where games[index].executableExists {
+            if games[index].engine == nil {
+                detectEngine(at: index)
+                changed = true
+            }
+            if games[index].iconFileName == nil, extractIcon(at: index) {
                 changed = true
             }
         }

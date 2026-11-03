@@ -1,11 +1,3 @@
-//
-//  LauncherError 2.swift
-//  LauncherCore
-//
-//  Created by Yudhistira Rafazaky Bandono on 04/11/26.
-//
-
-
 import Foundation
 
 public enum LauncherError: LocalizedError, Sendable {
@@ -21,6 +13,9 @@ public enum LauncherError: LocalizedError, Sendable {
     case noDXVKAssetFound
     case dxvkLayoutNotFound
     case unexpectedRuntimeLayout(String)
+    case nwjsUnavailable
+    case nwjsAppNotFound
+    case packageJSONMissing(String)
 
     public var errorDescription: String? {
         switch self {
@@ -48,6 +43,12 @@ public enum LauncherError: LocalizedError, Sendable {
             return "DXVK was downloaded, but its x64 DLL folder couldn't be found."
         case .unexpectedRuntimeLayout(let path):
             return "The Wine runtime has an unexpected folder layout: \(path)"
+        case .nwjsUnavailable:
+            return "Couldn't find an NW.js build for this Mac. Check your internet connection."
+        case .nwjsAppNotFound:
+            return "NW.js was downloaded, but nwjs.app couldn't be found inside it."
+        case .packageJSONMissing(let path):
+            return "This game has no readable package.json, so it can't run natively: \(path)"
         }
     }
 }
