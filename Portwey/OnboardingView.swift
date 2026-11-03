@@ -13,7 +13,7 @@ struct OnboardingView: View {
             VStack(spacing: 8) {
                 Text("Welcome to Portwey")
                     .font(.largeTitle.bold())
-                Text("To run Windows games, Portwey needs to set up Rosetta 2 and Wine first. You only have to do this once.")
+                Text("To run Windows games, Portwey needs to set up Rosetta 2, Wine and DXVK first. You only have to do this once.")
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
                     .frame(maxWidth: 460)
@@ -33,13 +33,9 @@ struct OnboardingView: View {
         case .idle:
             EmptyView()
         case .downloadingWine(let progress):
-            VStack(spacing: 8) {
-                ProgressView(value: progress)
-                Text("Downloading Wine… \(Int(progress * 100))%")
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-            }
-            .frame(maxWidth: 420)
+            downloadProgress(title: "Downloading Wine…", progress: progress)
+        case .downloadingDXVK(let progress):
+            downloadProgress(title: "Downloading DXVK…", progress: progress)
         case .failed(let message):
             Label(message, systemImage: "exclamationmark.triangle.fill")
                 .foregroundStyle(.red)
@@ -56,6 +52,16 @@ struct OnboardingView: View {
         }
     }
 
+    private func downloadProgress(title: String, progress: Double) -> some View {
+        VStack(spacing: 8) {
+            ProgressView(value: progress)
+            Text("\(title) \(Int(progress * 100))%")
+                .font(.callout)
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: 420)
+    }
+
     private var statusText: String {
         switch setup.phase {
         case .checkingRosetta: return "Checking Rosetta 2…"
@@ -63,6 +69,8 @@ struct OnboardingView: View {
         case .fetchingRelease: return "Looking for the latest Wine version…"
         case .extractingWine: return "Extracting Wine…"
         case .verifyingWine: return "Testing Wine…"
+        case .fetchingDXVK: return "Looking for the latest DXVK version…"
+        case .extractingDXVK: return "Extracting DXVK…"
         default: return ""
         }
     }

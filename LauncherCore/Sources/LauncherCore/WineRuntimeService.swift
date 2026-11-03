@@ -69,13 +69,36 @@ public enum WineRuntimeService {
         throw LauncherError.noWineAssetFound
     }
 
+    /// Downloads a release asset, retrying a few times if the connection drops.
+    /// Skips the download if the same file is already fully downloaded.
     public static func download(
         asset: GitHubRelease.Asset,
         to destination: URL,
+        attempts: Int = 3,
         progress: @escaping @Sendable (Double) -> Void
     ) async throws {
-        let downloader = FileDownloader(destination: destination, onProgress: progress)
-        _ = try await downloader.download(from: asset.browserDownloadUrl)
+        if let attributes = try? FileManager.default.attributesOfItem(atPath: destination.path),
+           let size = attributes[.size] as? Int,
+           size == asset.size {
+            progress(1)
+            return
+        }
+
+        var lastError: Error?
+        for attempt in 1...attempts {
+            do {
+                let downloader = FileDownloader(destination: destination, onProgress: progress)
+                _ = try await downloader.download(from: asset.browserDownloadUrl)
+                return
+            } catch {
+                lastError = error
+                if attempt < attempts {
+                    // Back off a little before retrying (2s, 4s, …).
+                    try await Task.sleep(for: .seconds(Double(attempt) * 2))
+                }
+            }
+        }
+        throw lastError ?? LauncherError.downloadFailed("Unknown error")
     }
 
     public static func extract(archive: URL, tag: String) async throws -> URL {

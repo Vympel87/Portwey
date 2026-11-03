@@ -23,7 +23,10 @@ final class FileDownloader: NSObject, URLSessionDownloadDelegate, @unchecked Sen
     func download(from url: URL) async throws -> URL {
         try await withCheckedThrowingContinuation { continuation in
             lock.withLock { self.continuation = continuation }
-            let session = URLSession(configuration: .default, delegate: self, delegateQueue: nil)
+            let configuration = URLSessionConfiguration.default
+            configuration.timeoutIntervalForRequest = 120       // max wait between data packets
+            configuration.timeoutIntervalForResource = 60 * 60  // max total download time
+            let session = URLSession(configuration: configuration, delegate: self, delegateQueue: nil)
             session.downloadTask(with: url).resume()
         }
     }

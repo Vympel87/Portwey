@@ -146,6 +146,19 @@ struct LibraryView: View {
 
             Spacer()
 
+            Picker("Graphics", selection: Binding(
+                get: { game.graphicsBackend },
+                set: { library.setGraphicsBackend($0, for: game.id) }
+            )) {
+                ForEach(GraphicsBackend.allCases) { backend in
+                    Text(backend.displayName).tag(backend)
+                }
+            }
+            .pickerStyle(.menu)
+            .fixedSize()
+            .disabled(runner.isBusy)
+            .help("Graphics backend used to translate DirectX for this game")
+
             Button {
                 showLogs.toggle()
             } label: {

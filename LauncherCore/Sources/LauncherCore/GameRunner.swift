@@ -47,11 +47,29 @@ public final class GameRunner {
                 Task { @MainActor in self?.log(line) }
             }
 
+            // Graphics backend: DXVK games run on a DXVK copy of Wine, WineD3D games on the original.
+            var launchRuntime = runtime
+            var extraEnvironment: [String: String] = [:]
+            switch game.graphicsBackend {
+            case .dxvk:
+                if let dxvk = DXVKService.installed() {
+                    launchRuntime = try await DXVKService.runtimeVariant(base: runtime, dxvk: dxvk) { [weak self] line in
+                        Task { @MainActor in self?.log(line) }
+                    }
+                    extraEnvironment = DXVKService.environment(for: bottle)
+                    log("Graphics: DXVK \(dxvk.tag)")
+                } else {
+                    log("⚠️ DXVK isn't installed, falling back to WineD3D")
+                }
+            case .wined3d:
+                log("Graphics: WineD3D (OpenGL)")
+            }
+
             let process = Process()
-            process.executableURL = runtime.wineBinaryURL
+            process.executableURL = launchRuntime.wineBinaryURL
             process.arguments = [game.executablePath] + game.arguments
             process.currentDirectoryURL = game.workingDirectoryURL
-            process.environment = BottleManager.environment(for: bottle)
+            process.environment = BottleManager.environment(for: bottle, extra: extraEnvironment)
 
             let pipe = Pipe()
             process.standardOutput = pipe
@@ -72,14 +90,14 @@ public final class GameRunner {
             }
 
             log("Launching \(game.title)…")
-            log("$ WINEPREFIX=\"\(bottle.path)\" \"\(runtime.wineBinaryPath)\" \"\(game.executablePath)\"")
+            log("$ WINEPREFIX=\"\(bottle.path)\" \"\(launchRuntime.wineBinaryPath)\" \"\(game.executablePath)\"")
             try process.run()
 
             self.process = process
             startedAt = Date()
             runningGameID = game.id
             runningBottle = bottle
-            runningRuntime = runtime
+            runningRuntime = launchRuntime
             state = .running(gameID: game.id)
         } catch {
             lastError = error.localizedDescription

@@ -1,11 +1,33 @@
 import Foundation
 
+public enum GraphicsBackend: String, Codable, CaseIterable, Identifiable, Sendable {
+    case dxvk
+    case wined3d
+
+    public var id: String { rawValue }
+
+    public var displayName: String {
+        switch self {
+        case .dxvk: return "DXVK (DirectX 10/11 → Metal)"
+        case .wined3d: return "WineD3D (OpenGL)"
+        }
+    }
+
+    public var shortName: String {
+        switch self {
+        case .dxvk: return "DXVK"
+        case .wined3d: return "WineD3D"
+        }
+    }
+}
+
 public struct Game: Codable, Identifiable, Sendable, Hashable {
     public let id: UUID
     public var title: String
     public var executablePath: String
     public var arguments: [String]
     public var bottleName: String
+    public var graphicsBackend: GraphicsBackend
     public var addedAt: Date
     public var lastPlayedAt: Date?
     public var playtimeSeconds: TimeInterval
@@ -16,6 +38,7 @@ public struct Game: Codable, Identifiable, Sendable, Hashable {
         executablePath: String,
         arguments: [String] = [],
         bottleName: String = BottleManager.defaultBottleName,
+        graphicsBackend: GraphicsBackend = .dxvk,
         addedAt: Date = Date(),
         lastPlayedAt: Date? = nil,
         playtimeSeconds: TimeInterval = 0
@@ -25,10 +48,32 @@ public struct Game: Codable, Identifiable, Sendable, Hashable {
         self.executablePath = executablePath
         self.arguments = arguments
         self.bottleName = bottleName
+        self.graphicsBackend = graphicsBackend
         self.addedAt = addedAt
         self.lastPlayedAt = lastPlayedAt
         self.playtimeSeconds = playtimeSeconds
     }
+
+    // MARK: - Codable (tolerant of older library.json files)
+
+    private enum CodingKeys: String, CodingKey {
+        case id, title, executablePath, arguments, bottleName, graphicsBackend, addedAt, lastPlayedAt, playtimeSeconds
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(UUID.self, forKey: .id)
+        title = try container.decode(String.self, forKey: .title)
+        executablePath = try container.decode(String.self, forKey: .executablePath)
+        arguments = try container.decodeIfPresent([String].self, forKey: .arguments) ?? []
+        bottleName = try container.decodeIfPresent(String.self, forKey: .bottleName) ?? BottleManager.defaultBottleName
+        graphicsBackend = try container.decodeIfPresent(GraphicsBackend.self, forKey: .graphicsBackend) ?? .dxvk
+        addedAt = try container.decodeIfPresent(Date.self, forKey: .addedAt) ?? Date()
+        lastPlayedAt = try container.decodeIfPresent(Date.self, forKey: .lastPlayedAt)
+        playtimeSeconds = try container.decodeIfPresent(TimeInterval.self, forKey: .playtimeSeconds) ?? 0
+    }
+
+    // MARK: - Helpers
 
     public var executableURL: URL { URL(fileURLWithPath: executablePath) }
 

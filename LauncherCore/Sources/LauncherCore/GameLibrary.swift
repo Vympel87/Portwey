@@ -30,6 +30,12 @@ public final class GameLibrary {
         save()
     }
 
+    public func setGraphicsBackend(_ backend: GraphicsBackend, for gameID: UUID) {
+        guard let index = games.firstIndex(where: { $0.id == gameID }) else { return }
+        games[index].graphicsBackend = backend
+        save()
+    }
+
     public func recordSession(gameID: UUID, duration: TimeInterval) {
         guard let index = games.firstIndex(where: { $0.id == gameID }) else { return }
         games[index].lastPlayedAt = Date()

@@ -18,6 +18,9 @@ public enum LauncherError: LocalizedError, Sendable {
     case invalidResponse
     case bottleCreationFailed
     case executableNotFound(String)
+    case noDXVKAssetFound
+    case dxvkLayoutNotFound
+    case unexpectedRuntimeLayout(String)
 
     public var errorDescription: String? {
         switch self {
@@ -39,6 +42,12 @@ public enum LauncherError: LocalizedError, Sendable {
             return "Couldn't create the Windows environment (bottle)."
         case .executableNotFound(let path):
             return "Game file not found: \(path)"
+        case .noDXVKAssetFound:
+            return "Couldn't find a DXVK-macOS package in the latest release."
+        case .dxvkLayoutNotFound:
+            return "DXVK was downloaded, but its x64 DLL folder couldn't be found."
+        case .unexpectedRuntimeLayout(let path):
+            return "The Wine runtime has an unexpected folder layout: \(path)"
         }
     }
 }
