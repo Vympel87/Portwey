@@ -20,9 +20,12 @@ public final class GameLibrary {
             executablePath: executable.path
         )
         games.append(game)
+        if let index = games.indices.last {
+            extractIcon(at: index)
+        }
         sortGames()
         save()
-        return game
+        return games.first { $0.id == game.id } ?? game
     }
 
     public func update(_ game: Game) {
@@ -33,7 +36,8 @@ public final class GameLibrary {
     }
 
     public func remove(_ game: Game) {
-        deleteCoverFile(named: game.coverFileName)
+        deleteImageFile(named: game.coverFileName)
+        deleteImageFile(named: game.iconFileName)
         games.removeAll { $0.id == game.id }
         save()
     }
@@ -44,7 +48,7 @@ public final class GameLibrary {
         save()
     }
 
-    // MARK: - Covers
+    // MARK: - Covers & icons
 
     /// Copies the image into Portwey's data folder, so the cover survives even if the original is deleted.
     public func setCover(from source: URL, for gameID: UUID) throws {
@@ -57,19 +61,38 @@ public final class GameLibrary {
         let destination = AppPaths.covers.appendingPathComponent(fileName)
         try FileManager.default.copyItem(at: source, to: destination)
 
-        deleteCoverFile(named: games[index].coverFileName)
+        deleteImageFile(named: games[index].coverFileName)
         games[index].coverFileName = fileName
         save()
     }
 
     public func removeCover(for gameID: UUID) {
         guard let index = games.firstIndex(where: { $0.id == gameID }) else { return }
-        deleteCoverFile(named: games[index].coverFileName)
+        deleteImageFile(named: games[index].coverFileName)
         games[index].coverFileName = nil
         save()
     }
 
-    private func deleteCoverFile(named fileName: String?) {
+    /// Pulls the icon out of the game's .exe. Returns true if one was found.
+    @discardableResult
+    private func extractIcon(at index: Int) -> Bool {
+        let game = games[index]
+        guard game.executableExists, let png = ExeIconExtractor.extractPNG(from: game.executableURL) else {
+            return false
+        }
+        do {
+            try AppPaths.ensureDirectories()
+            let fileName = "\(game.id.uuidString)-icon.png"
+            try png.write(to: AppPaths.covers.appendingPathComponent(fileName), options: .atomic)
+            games[index].iconFileName = fileName
+            return true
+        } catch {
+            print("Failed to save icon for \(game.title): \(error)")
+            return false
+        }
+    }
+
+    private func deleteImageFile(named fileName: String?) {
         guard let fileName else { return }
         try? FileManager.default.removeItem(at: AppPaths.covers.appendingPathComponent(fileName))
     }
@@ -98,6 +121,18 @@ public final class GameLibrary {
             sortGames()
         } catch {
             print("Failed to load library: \(error)")
+            return
+        }
+
+        // Give games added before icon support their icon.
+        var changed = false
+        for index in games.indices where games[index].iconFileName == nil {
+            if extractIcon(at: index) {
+                changed = true
+            }
+        }
+        if changed {
+            save()
         }
     }
 

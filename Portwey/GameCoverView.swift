@@ -2,7 +2,7 @@ import SwiftUI
 import AppKit
 import LauncherCore
 
-/// Shows the game's custom cover, or a colored placeholder if it has none.
+/// Shows the custom cover, else the .exe icon on a blurred backdrop, else a colored placeholder.
 struct GameCoverView: View {
     let game: Game
     var iconSize: CGFloat = 40
@@ -18,6 +18,29 @@ struct GameCoverView: View {
                         .scaledToFill()
                 }
                 .clipped()
+        } else if let url = game.iconURL, let icon = NSImage(contentsOf: url) {
+            ZStack {
+                LinearGradient(colors: game.coverColors, startPoint: .topLeading, endPoint: .bottomTrailing)
+
+                // A soft, blurred copy of the icon as the background.
+                Color.clear
+                    .overlay {
+                        Image(nsImage: icon)
+                            .resizable()
+                            .scaledToFill()
+                            .blur(radius: 28)
+                            .opacity(0.7)
+                    }
+                    .clipped()
+
+                Image(nsImage: icon)
+                    .resizable()
+                    .interpolation(.high)
+                    .scaledToFit()
+                    .frame(width: iconSize * 1.8, height: iconSize * 1.8)
+                    .shadow(color: .black.opacity(0.35), radius: 10, y: 4)
+            }
+            .clipped()
         } else {
             ZStack {
                 LinearGradient(colors: game.coverColors, startPoint: .topLeading, endPoint: .bottomTrailing)

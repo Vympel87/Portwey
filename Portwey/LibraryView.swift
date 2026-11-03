@@ -20,6 +20,10 @@ struct LibraryView: View {
     @State private var searchText = ""
     @State private var filter: LibraryFilter = .all
     @State private var isImporting = false
+    @State private var isImportBusy = false
+    @State private var isDropTargeted = false
+    @State private var executableChoice: ExecutableChoice?
+    @State private var importError: String?
 
     private let exeType = UTType(filenameExtension: "exe") ?? .item
     private let columns = [GridItem(.adaptive(minimum: 200, maximum: 260), spacing: 20)]
@@ -60,6 +64,34 @@ struct LibraryView: View {
                 .padding(32)
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
+            .overlay {
+                if isDropTargeted {
+                    RoundedRectangle(cornerRadius: 16)
+                        .strokeBorder(Color.accentColor, style: StrokeStyle(lineWidth: 3, dash: [10, 6]))
+                        .background(Color.accentColor.opacity(0.08), in: RoundedRectangle(cornerRadius: 16))
+                        .overlay {
+                            Label("Drop to add game", systemImage: "plus.circle.fill")
+                                .font(.title2.bold())
+                                .foregroundStyle(.tint)
+                        }
+                        .padding(16)
+                        .allowsHitTesting(false)
+                }
+            }
+            .overlay {
+                if isImportBusy {
+                    ProgressView("Importing…")
+                        .padding(24)
+                        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14))
+                }
+            }
+            .dropDestination(for: URL.self) { urls, _ in
+                guard let url = urls.first else { return false }
+                importItem(url)
+                return true
+            } isTargeted: { targeted in
+                isDropTargeted = targeted
+            }
             .navigationTitle("Library")
             .searchable(text: $searchText, placement: .toolbar, prompt: "Search games")
             .toolbar {
@@ -69,18 +101,85 @@ struct LibraryView: View {
                     } label: {
                         Label("Add game", systemImage: "plus")
                     }
+                    .disabled(isImportBusy)
                 }
             }
             .navigationDestination(for: UUID.self) { id in
                 GameDetailView(gameID: id)
             }
         }
-        .fileImporter(isPresented: $isImporting, allowedContentTypes: [exeType], allowsMultipleSelection: false) { result in
+        .fileImporter(
+            isPresented: $isImporting,
+            allowedContentTypes: [exeType, .folder, .zip],
+            allowsMultipleSelection: false
+        ) { result in
             if case .success(let urls) = result, let url = urls.first {
-                let game = library.addGame(executable: url)
-                path = [game.id]
+                importItem(url)
             }
         }
+        .sheet(item: $executableChoice) { choice in
+            ExecutableChoiceSheet(choice: choice) { exe in
+                addGame(exe)
+            }
+        }
+        .alert(
+            "Couldn't add game",
+            isPresented: Binding(
+                get: { importError != nil },
+                set: { if !$0 { importError = nil } }
+            )
+        ) {
+            Button("OK") {}
+        } message: {
+            Text(importError ?? "")
+        }
+    }
+
+    // MARK: - Importing
+
+    /// Accepts an .exe, a game folder, or a .zip.
+    private func importItem(_ url: URL) {
+        Task {
+            isImportBusy = true
+            defer { isImportBusy = false }
+
+            do {
+                let fileExtension = url.pathExtension.lowercased()
+                if fileExtension == "exe" {
+                    addGame(url)
+                    return
+                }
+
+                var folder = url
+                if fileExtension == "zip" {
+                    folder = try await GameImporter.extractZip(url)
+                }
+
+                var isDirectory: ObjCBool = false
+                guard FileManager.default.fileExists(atPath: folder.path, isDirectory: &isDirectory),
+                      isDirectory.boolValue else {
+                    importError = "Portwey can add a game's .exe, its folder, or a .zip file."
+                    return
+                }
+
+                let candidates = GameImporter.findExecutables(in: folder)
+                switch candidates.count {
+                case 0:
+                    importError = "No Windows .exe was found in “\(folder.lastPathComponent)”."
+                case 1:
+                    addGame(candidates[0])
+                default:
+                    executableChoice = ExecutableChoice(folder: folder, candidates: candidates)
+                }
+            } catch {
+                importError = error.localizedDescription
+            }
+        }
+    }
+
+    private func addGame(_ executable: URL) {
+        let game = library.addGame(executable: executable)
+        path = [game.id]
     }
 
     // MARK: - Sections
@@ -143,7 +242,7 @@ struct LibraryView: View {
                 .foregroundStyle(.secondary)
             Text("No games yet")
                 .font(.title2.bold())
-            Text("Add a Windows .exe to get started.")
+            Text("Add a game's .exe, folder or .zip, or just drag it here.")
                 .foregroundStyle(.secondary)
             Button {
                 isImporting = true

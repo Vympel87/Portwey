@@ -30,6 +30,7 @@ public struct Game: Codable, Identifiable, Sendable, Hashable {
     public var bottleName: String
     public var graphicsBackend: GraphicsBackend
     public var coverFileName: String?
+    public var iconFileName: String?
     public var addedAt: Date
     public var lastPlayedAt: Date?
     public var playtimeSeconds: TimeInterval
@@ -43,6 +44,7 @@ public struct Game: Codable, Identifiable, Sendable, Hashable {
         bottleName: String = BottleManager.defaultBottleName,
         graphicsBackend: GraphicsBackend = .dxvk,
         coverFileName: String? = nil,
+        iconFileName: String? = nil,
         addedAt: Date = Date(),
         lastPlayedAt: Date? = nil,
         playtimeSeconds: TimeInterval = 0
@@ -55,6 +57,7 @@ public struct Game: Codable, Identifiable, Sendable, Hashable {
         self.bottleName = bottleName
         self.graphicsBackend = graphicsBackend
         self.coverFileName = coverFileName
+        self.iconFileName = iconFileName
         self.addedAt = addedAt
         self.lastPlayedAt = lastPlayedAt
         self.playtimeSeconds = playtimeSeconds
@@ -64,7 +67,7 @@ public struct Game: Codable, Identifiable, Sendable, Hashable {
 
     private enum CodingKeys: String, CodingKey {
         case id, title, executablePath, arguments, environment, bottleName, graphicsBackend
-        case coverFileName, addedAt, lastPlayedAt, playtimeSeconds
+        case coverFileName, iconFileName, addedAt, lastPlayedAt, playtimeSeconds
     }
 
     public init(from decoder: Decoder) throws {
@@ -77,6 +80,7 @@ public struct Game: Codable, Identifiable, Sendable, Hashable {
         bottleName = try container.decodeIfPresent(String.self, forKey: .bottleName) ?? BottleManager.defaultBottleName
         graphicsBackend = try container.decodeIfPresent(GraphicsBackend.self, forKey: .graphicsBackend) ?? .dxvk
         coverFileName = try container.decodeIfPresent(String.self, forKey: .coverFileName)
+        iconFileName = try container.decodeIfPresent(String.self, forKey: .iconFileName)
         addedAt = try container.decodeIfPresent(Date.self, forKey: .addedAt) ?? Date()
         lastPlayedAt = try container.decodeIfPresent(Date.self, forKey: .lastPlayedAt)
         playtimeSeconds = try container.decodeIfPresent(TimeInterval.self, forKey: .playtimeSeconds) ?? 0
@@ -93,8 +97,14 @@ public struct Game: Codable, Identifiable, Sendable, Hashable {
         FileManager.default.fileExists(atPath: executablePath)
     }
 
+    /// Custom cover picked by the user.
     public var coverURL: URL? {
         coverFileName.map { AppPaths.covers.appendingPathComponent($0) }
+    }
+
+    /// Icon extracted automatically from the .exe.
+    public var iconURL: URL? {
+        iconFileName.map { AppPaths.covers.appendingPathComponent($0) }
     }
 
     /// Uses the .exe name as the title, or the folder name if the .exe name is too generic.
