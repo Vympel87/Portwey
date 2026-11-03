@@ -13,6 +13,7 @@ public enum AppPaths {
     public static var downloads: URL { root.appendingPathComponent("downloads", isDirectory: true) }
     public static var logs: URL { root.appendingPathComponent("logs", isDirectory: true) }
     public static var runtimeInfoFile: URL { runtimes.appendingPathComponent("current.json") }
+    public static var libraryFile: URL { root.appendingPathComponent("library.json") }
 
     public static func ensureDirectories() throws {
         for dir in [root, runtimes, bottles, downloads, logs] {

@@ -14,7 +14,7 @@ struct ContentView: View {
     var body: some View {
         Group {
             if setup.isReady {
-                ReadyPlaceholderView()
+                LibraryView()
             } else {
                 OnboardingView()
             }
@@ -28,29 +28,10 @@ struct ContentView: View {
     }
 }
 
-private struct ReadyPlaceholderView: View {
-    @Environment(SetupManager.self) private var setup
-
-    var body: some View {
-        VStack(spacing: 16) {
-            Image(systemName: "checkmark.seal.fill")
-                .font(.system(size: 56))
-                .foregroundStyle(.green)
-            Text("Portwey is ready")
-                .font(.largeTitle.bold())
-            if let runtime = setup.runtime {
-                Text(runtime.version)
-                    .font(.headline)
-                    .foregroundStyle(.secondary)
-            }
-            Text("Your game library will show up here (coming next).")
-                .foregroundStyle(.secondary)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-    }
-}
-
 #Preview {
-    ContentView()
+    let library = GameLibrary()
+    return ContentView()
         .environment(SetupManager())
+        .environment(library)
+        .environment(GameRunner(library: library))
 }

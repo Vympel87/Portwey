@@ -16,6 +16,8 @@ public enum LauncherError: LocalizedError, Sendable {
     case downloadFailed(String)
     case wineBinaryNotFound
     case invalidResponse
+    case bottleCreationFailed
+    case executableNotFound(String)
 
     public var errorDescription: String? {
         switch self {
@@ -33,6 +35,10 @@ public enum LauncherError: LocalizedError, Sendable {
             return "Wine was extracted, but the 'wine' binary couldn't be found."
         case .invalidResponse:
             return "Received an invalid response from GitHub. Check your internet connection."
+        case .bottleCreationFailed:
+            return "Couldn't create the Windows environment (bottle)."
+        case .executableNotFound(let path):
+            return "Game file not found: \(path)"
         }
     }
 }
