@@ -36,6 +36,8 @@ public struct Game: Codable, Identifiable, Sendable, Hashable {
     public var launchMethod: LaunchMethod
     public var coverFileName: String?
     public var iconFileName: String?
+    /// The preset applied to this game, if any.
+    public var presetID: String?
     public var addedAt: Date
     public var lastPlayedAt: Date?
     public var playtimeSeconds: TimeInterval
@@ -52,6 +54,7 @@ public struct Game: Codable, Identifiable, Sendable, Hashable {
         launchMethod: LaunchMethod = .wine,
         coverFileName: String? = nil,
         iconFileName: String? = nil,
+        presetID: String? = nil,
         addedAt: Date = Date(),
         lastPlayedAt: Date? = nil,
         playtimeSeconds: TimeInterval = 0
@@ -67,6 +70,7 @@ public struct Game: Codable, Identifiable, Sendable, Hashable {
         self.launchMethod = launchMethod
         self.coverFileName = coverFileName
         self.iconFileName = iconFileName
+        self.presetID = presetID
         self.addedAt = addedAt
         self.lastPlayedAt = lastPlayedAt
         self.playtimeSeconds = playtimeSeconds
@@ -76,7 +80,7 @@ public struct Game: Codable, Identifiable, Sendable, Hashable {
 
     private enum CodingKeys: String, CodingKey {
         case id, title, executablePath, arguments, environment, bottleName, graphicsBackend
-        case engine, launchMethod, coverFileName, iconFileName, addedAt, lastPlayedAt, playtimeSeconds
+        case engine, launchMethod, coverFileName, iconFileName, presetID, addedAt, lastPlayedAt, playtimeSeconds
     }
 
     public init(from decoder: Decoder) throws {
@@ -92,6 +96,7 @@ public struct Game: Codable, Identifiable, Sendable, Hashable {
         launchMethod = try container.decodeIfPresent(LaunchMethod.self, forKey: .launchMethod) ?? .wine
         coverFileName = try container.decodeIfPresent(String.self, forKey: .coverFileName)
         iconFileName = try container.decodeIfPresent(String.self, forKey: .iconFileName)
+        presetID = try container.decodeIfPresent(String.self, forKey: .presetID)
         addedAt = try container.decodeIfPresent(Date.self, forKey: .addedAt) ?? Date()
         lastPlayedAt = try container.decodeIfPresent(Date.self, forKey: .lastPlayedAt)
         playtimeSeconds = try container.decodeIfPresent(TimeInterval.self, forKey: .playtimeSeconds) ?? 0

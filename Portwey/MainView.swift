@@ -3,6 +3,7 @@ import LauncherCore
 
 enum SidebarItem: Hashable {
     case library
+    case presets
     case bottles
     case runtimes
 }
@@ -16,6 +17,8 @@ struct MainView: View {
                 Section("Portwey") {
                     Label("Library", systemImage: "square.grid.2x2")
                         .tag(SidebarItem.library)
+                    Label("Presets", systemImage: "slider.horizontal.3")
+                        .tag(SidebarItem.presets)
                     Label("Bottles", systemImage: "shippingbox")
                         .tag(SidebarItem.bottles)
                     Label("Runtimes", systemImage: "cpu")
@@ -31,6 +34,8 @@ struct MainView: View {
             switch selection ?? .library {
             case .library:
                 LibraryView()
+            case .presets:
+                PresetsView()
             case .bottles:
                 BottlesView()
             case .runtimes:

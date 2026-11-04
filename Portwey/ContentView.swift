@@ -10,6 +10,7 @@ import LauncherCore
 
 struct ContentView: View {
     @Environment(SetupManager.self) private var setup
+    @Environment(GameLibrary.self) private var library
 
     var body: some View {
         Group {
@@ -24,6 +25,9 @@ struct ContentView: View {
             if setup.runtime != nil, setup.phase == .idle {
                 await setup.start()
             }
+        }
+        .task {
+            await library.refreshPresets()
         }
     }
 }

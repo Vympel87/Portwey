@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 import LauncherCore
 
 struct GameSettingsView: View {
@@ -16,6 +17,7 @@ struct GameSettingsView: View {
     @State private var useOwnBottle: Bool
     @State private var argumentsText: String
     @State private var envRows: [EnvRow]
+    @State private var editingPreset: GamePreset?
 
     init(game: Game) {
         gameID = game.id
@@ -28,9 +30,11 @@ struct GameSettingsView: View {
         _backend = State(initialValue: game.graphicsBackend)
         _useOwnBottle = State(initialValue: game.bottleName != BottleManager.defaultBottleName)
         _argumentsText = State(initialValue: ArgumentsFormatter.join(game.arguments))
-        _envRows = State(initialValue: game.environment
-            .sorted { $0.key < $1.key }
-            .map { EnvRow(key: $0.key, value: $0.value) })
+        _envRows = State(initialValue: Self.rows(from: game.environment))
+    }
+
+    private var game: Game? {
+        library.games.first { $0.id == gameID }
     }
 
     private var isLocked: Bool {
@@ -68,6 +72,8 @@ struct GameSettingsView: View {
                 }
                 .padding(8)
             }
+
+            presetSection
 
             if engine?.nativeLaunchMethod != nil {
                 GroupBox("Runs with") {
@@ -124,7 +130,7 @@ struct GameSettingsView: View {
 
                     Text(launchMethod.isNative
                          ? "Not used: native games render with Metal directly."
-                         : "DXVK works best for DirectX 10/11 games (most Unity games). Use WineD3D for older DirectX 9 or OpenGL games.")
+                         : "DXVK works best for DirectX 10/11 games (most Unity games). DXMT needs a CrossOver-based Wine. Use WineD3D for older DirectX 9 or OpenGL games.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -187,10 +193,108 @@ struct GameSettingsView: View {
         .onChange(of: useOwnBottle) { save() }
         .onChange(of: argumentsText) { save() }
         .onChange(of: envRows) { save() }
+        .sheet(item: $editingPreset) { preset in
+            PresetEditorSheet(preset: preset, isNew: !library.isMyPreset(preset)) { saved in
+                library.saveMyPreset(saved, appliedTo: gameID)
+            }
+        }
     }
 
+    // MARK: - Preset
+
+    private var presetSection: some View {
+        GroupBox("Preset") {
+            VStack(alignment: .leading, spacing: 10) {
+                if let game, let preset = library.preset(for: game) {
+                    HStack(spacing: 8) {
+                        if let status = preset.status {
+                            PresetStatusBadge(status: status)
+                        }
+                        Text(preset.title)
+                            .font(.headline)
+                        PresetSourceBadge(isMine: library.isMyPreset(preset))
+                        Spacer()
+                        if game.presetID == preset.id {
+                            Label("Applied", systemImage: "checkmark.circle.fill")
+                                .foregroundStyle(.green)
+                        } else {
+                            Button("Apply Preset") {
+                                apply(preset)
+                            }
+                        }
+                    }
+                    Text(preset.settingsSummary)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    if let notes = preset.notes, !notes.isEmpty {
+                        Text(notes)
+                            .font(.caption)
+                    }
+                } else {
+                    Text("No preset matches this game yet.")
+                        .foregroundStyle(.secondary)
+                }
+
+                Divider()
+
+                HStack(spacing: 10) {
+                    Button {
+                        openPresetEditor()
+                    } label: {
+                        Label("Save as My Preset…", systemImage: "square.and.arrow.down")
+                    }
+
+                    if let game,
+                       let preset = library.preset(for: game),
+                       library.isMyPreset(preset),
+                       let url = PresetService.shareURL(for: preset) {
+                        Button {
+                            NSWorkspace.shared.open(url)
+                        } label: {
+                            Label("Share…", systemImage: "square.and.arrow.up")
+                        }
+                        .help("Open a pre-filled GitHub issue so the preset can be added for everyone")
+                    }
+                }
+
+                Text("Found settings that work? Save them as your own preset, then share it so other players get them automatically.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            .padding(8)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    /// Starts from your existing preset for this game (with fresh settings), or a brand-new one.
+    private func openPresetEditor() {
+        guard let game else { return }
+        let fresh = PresetService.makePreset(from: game)
+
+        if let existing = library.preset(for: game), library.isMyPreset(existing) {
+            var updated = existing
+            updated.settings = fresh.settings
+            editingPreset = updated
+        } else {
+            editingPreset = fresh
+        }
+    }
+
+    private func apply(_ preset: GamePreset) {
+        library.applyPreset(preset, to: gameID)
+        // Reflect the new settings in the fields below.
+        guard let updated = game else { return }
+        launchMethod = updated.launchMethod
+        backend = updated.graphicsBackend
+        useOwnBottle = updated.bottleName != BottleManager.defaultBottleName
+        argumentsText = ArgumentsFormatter.join(updated.arguments)
+        envRows = Self.rows(from: updated.environment)
+    }
+
+    // MARK: - Saving
+
     /// Applies only the editable fields to the latest copy of the game,
-    /// so playtime and last-played info are never overwritten.
+    /// so playtime, last-played info and the applied preset are never overwritten.
     private func save() {
         guard var game = library.games.first(where: { $0.id == gameID }) else { return }
 
@@ -215,6 +319,12 @@ struct GameSettingsView: View {
         game.environment = environment
 
         library.update(game)
+    }
+
+    private static func rows(from environment: [String: String]) -> [EnvRow] {
+        environment
+            .sorted { $0.key < $1.key }
+            .map { EnvRow(key: $0.key, value: $0.value) }
     }
 }
 

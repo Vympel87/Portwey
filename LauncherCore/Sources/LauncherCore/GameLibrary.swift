@@ -5,6 +5,10 @@ import Observation
 @Observable
 public final class GameLibrary {
     public private(set) var games: [Game] = []
+    /// Presets from the Portwey repo (cached copy until a fresh one is downloaded).
+    public private(set) var communityPresets: [GamePreset] = PresetService.cachedPresets()
+    /// Presets saved on this Mac.
+    public private(set) var myPresets: [GamePreset] = PresetService.loadMyPresets()
 
     public init() {
         load()
@@ -23,6 +27,9 @@ public final class GameLibrary {
         if let index = games.indices.last {
             detectEngine(at: index)
             extractIcon(at: index)
+            if let preset = preset(for: games[index]) {
+                applySettings(of: preset, at: index)
+            }
         }
         sortGames()
         save()
@@ -59,6 +66,110 @@ public final class GameLibrary {
         guard let index = games.firstIndex(where: { $0.id == gameID }) else { return }
         games[index].graphicsBackend = backend
         save()
+    }
+
+    // MARK: - Presets
+
+    /// Downloads the latest community presets. Games that were never played or configured by a preset pick one up.
+    public func refreshPresets() async {
+        do {
+            communityPresets = try await PresetService.fetchPresets()
+        } catch {
+            print("Couldn't refresh presets: \(error.localizedDescription)")
+            return
+        }
+
+        var changed = false
+        for index in games.indices where games[index].presetID == nil && games[index].lastPlayedAt == nil {
+            if let preset = preset(for: games[index]) {
+                applySettings(of: preset, at: index)
+                changed = true
+            }
+        }
+        if changed {
+            save()
+        }
+    }
+
+    /// The best preset for a game. Your own presets win over community ones.
+    public func preset(for game: Game) -> GamePreset? {
+        PresetService.bestMatch(for: game, mine: myPresets, community: communityPresets)
+    }
+
+    public func isMyPreset(_ preset: GamePreset) -> Bool {
+        myPresets.contains { $0.id == preset.id }
+    }
+
+    public func games(usingPreset preset: GamePreset) -> [Game] {
+        games.filter { $0.presetID == preset.id }
+    }
+
+    public func applyPreset(_ preset: GamePreset, to gameID: UUID) {
+        guard let index = games.firstIndex(where: { $0.id == gameID }) else { return }
+        applySettings(of: preset, at: index)
+        save()
+    }
+
+    /// Adds or updates one of your presets. Pass `appliedTo` to mark a game as using it.
+    public func saveMyPreset(_ preset: GamePreset, appliedTo gameID: UUID? = nil) {
+        if let index = myPresets.firstIndex(where: { $0.id == preset.id }) {
+            myPresets[index] = preset
+        } else {
+            myPresets.append(preset)
+        }
+        myPresets.sort { $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending }
+        persistMyPresets()
+
+        if let gameID, let index = games.firstIndex(where: { $0.id == gameID }) {
+            games[index].presetID = preset.id
+            save()
+        }
+    }
+
+    /// Deletes one of your presets. Games keep their settings; only the link to the preset goes.
+    public func deleteMyPreset(_ preset: GamePreset) {
+        myPresets.removeAll { $0.id == preset.id }
+        persistMyPresets()
+
+        for index in games.indices where games[index].presetID == preset.id {
+            games[index].presetID = nil
+        }
+        save()
+    }
+
+    /// A complete presets.json for the repo: community presets plus yours.
+    public func exportPresetsFile() throws -> Data {
+        try PresetService.exportData(community: communityPresets, mine: myPresets)
+    }
+
+    private func applySettings(of preset: GamePreset, at index: Int) {
+        let settings = preset.settings
+        if let launchMethod = settings.launchMethod {
+            games[index].launchMethod = launchMethod
+        }
+        if let backend = settings.graphicsBackend {
+            games[index].graphicsBackend = backend
+        }
+        if let arguments = settings.arguments {
+            games[index].arguments = arguments
+        }
+        if let environment = settings.environment {
+            games[index].environment = environment
+        }
+        if let ownBottle = settings.ownBottle {
+            games[index].bottleName = ownBottle
+                ? BottleManager.ownBottleName(for: games[index].id)
+                : BottleManager.defaultBottleName
+        }
+        games[index].presetID = preset.id
+    }
+
+    private func persistMyPresets() {
+        do {
+            try PresetService.saveMyPresets(myPresets)
+        } catch {
+            print("Failed to save my presets: \(error)")
+        }
     }
 
     // MARK: - Queries

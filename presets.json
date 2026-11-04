@@ -1,0 +1,19 @@
+{
+  "presets" : [
+    {
+      "id" : "starmaker-story",
+      "match" : {
+        "engine" : "unity",
+        "executable" : "Starmaker Story.exe"
+      },
+      "notes" : "Unity (DirectX 11). Runs with DXVK. WineD3D can't start its renderer, and DXMT needs a CrossOver-based Wine.",
+      "settings" : {
+        "graphicsBackend" : "dxvk",
+        "launchMethod" : "wine"
+      },
+      "status" : "works",
+      "title" : "Starmaker Story"
+    }
+  ],
+  "version" : 1
+}
