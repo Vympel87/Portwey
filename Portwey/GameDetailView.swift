@@ -83,6 +83,7 @@ struct GameDetailView: View {
     private func hero(for game: Game) -> some View {
         let status = GameStatus(game: game, runner: runner)
         let runnerLabel = game.launchMethod.isNative ? "Native" : game.graphicsBackend.shortName
+        let isLastLaunched = runner.lastGameID == game.id && runner.activeGameID == nil
 
         return ZStack(alignment: .bottomLeading) {
             GameCoverView(game: game, iconSize: 120, iconOpacity: 0.15)
@@ -109,7 +110,7 @@ struct GameDetailView: View {
                     moreMenu(for: game)
                 }
 
-                if let error = runner.lastError, runner.activeGameID == nil {
+                if isLastLaunched, let error = runner.lastError {
                     Text(error)
                         .font(.caption)
                         .foregroundStyle(.white)
@@ -117,10 +118,19 @@ struct GameDetailView: View {
                         .background(.red.opacity(0.6), in: RoundedRectangle(cornerRadius: 8))
                         .lineLimit(3)
                 }
+
+                if isLastLaunched, let hint = runner.hint {
+                    Label(hint, systemImage: "lightbulb.fill")
+                        .font(.caption)
+                        .foregroundStyle(.white)
+                        .padding(8)
+                        .background(.orange.opacity(0.6), in: RoundedRectangle(cornerRadius: 8))
+                        .lineLimit(4)
+                }
             }
             .padding(28)
         }
-        .frame(height: 280)
+        .frame(height: 300)
         .clipShape(RoundedRectangle(cornerRadius: 18))
     }
 

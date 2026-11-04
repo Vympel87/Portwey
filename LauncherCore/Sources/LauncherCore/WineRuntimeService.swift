@@ -209,6 +209,39 @@ public enum WineRuntimeService {
         }
         unregister(info)
     }
+    
+    /// Adds a Wine build the user already has, for example one compiled from CrossOver's source.
+    /// It's copied (APFS clone, so it's quick) into Portwey's runtimes folder so it stays put.
+    public static func importRuntime(from source: URL) async throws -> RuntimeInfo {
+        guard let sourceBinary = findWineBinary(in: source) else {
+            throw LauncherError.wineBinaryNotFound
+        }
+        let version = try await wineVersion(binary: sourceBinary)
+
+        let baseName = source.deletingPathExtension().lastPathComponent.replacingOccurrences(of: " ", with: "-")
+        let folderName = "imported-\(baseName)"
+        let destination = AppPaths.runtimes.appendingPathComponent(folderName, isDirectory: true)
+
+        try AppPaths.ensureDirectories()
+        if FileManager.default.fileExists(atPath: destination.path) {
+            try FileManager.default.removeItem(at: destination)
+        }
+        try await Shell.runChecked("/bin/cp", ["-cRp", source.path, destination.path])
+        _ = try? await Shell.run("/usr/bin/xattr", ["-dr", "com.apple.quarantine", destination.path])
+
+        guard let binary = findWineBinary(in: destination) else {
+            throw LauncherError.wineBinaryNotFound
+        }
+
+        let info = RuntimeInfo(
+            tag: folderName,
+            version: version,
+            installPath: destination.path,
+            wineBinaryPath: binary.path
+        )
+        register(info)
+        return info
+    }
 
     // MARK: - Building blocks
 

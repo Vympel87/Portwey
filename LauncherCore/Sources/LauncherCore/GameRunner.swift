@@ -13,6 +13,10 @@ public final class GameRunner {
     public private(set) var state: State = .idle
     public private(set) var logs: [String] = []
     public private(set) var lastError: String?
+    /// Advice for a known problem spotted in the log of the last launch.
+    public private(set) var hint: String?
+    /// The game that was launched most recently, so errors and hints show on the right page.
+    public private(set) var lastGameID: UUID?
 
     private let library: GameLibrary
     private var process: Process?
@@ -38,6 +42,8 @@ public final class GameRunner {
         guard state == .idle else { return }
         logs.removeAll()
         lastError = nil
+        hint = nil
+        lastGameID = game.id
         state = .preparing(gameID: game.id)
 
         do {
@@ -87,7 +93,7 @@ public final class GameRunner {
             Task { @MainActor in self?.log(line) }
         }
 
-        // Graphics backend: DXVK games run on a DXVK copy of Wine, WineD3D games on the original.
+        // Graphics backend: DXVK and DXMT games run on a modified copy of Wine, WineD3D games on the original.
         var launchRuntime = runtime
         var extraEnvironment: [String: String] = [:]
         switch game.graphicsBackend {
@@ -101,6 +107,15 @@ public final class GameRunner {
             } else {
                 log("⚠️ DXVK isn't installed, falling back to WineD3D")
             }
+        case .dxmt:
+            let dxmt = try await DXMTService.ensureInstalled { [weak self] line in
+                Task { @MainActor in self?.log(line) }
+            }
+            launchRuntime = try await DXMTService.runtimeVariant(base: runtime, dxmt: dxmt) { [weak self] line in
+                Task { @MainActor in self?.log(line) }
+            }
+            try DXMTService.install(dxmt, into: bottle)
+            log("Graphics: DXMT \(dxmt.tag) (experimental, 64-bit games only)")
         case .wined3d:
             log("Graphics: WineD3D (OpenGL)")
         }
@@ -242,7 +257,12 @@ public final class GameRunner {
 
     private func appendOutput(_ text: String) {
         for line in text.split(separator: "\n", omittingEmptySubsequences: true) {
-            logs.append(String(line))
+            let line = String(line)
+            logs.append(line)
+            // Keep the first known problem; it's usually the root cause.
+            if hint == nil, let advice = KnownIssues.hint(for: line) {
+                hint = advice
+            }
         }
         trimLogs()
     }

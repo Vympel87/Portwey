@@ -19,6 +19,8 @@ public enum LauncherError: LocalizedError, Sendable {
     case godotVersionUnavailable(String)
     case godotAppNotFound
     case godotNotSupported(String)
+    case dxmtUnavailable
+    case dxmtLayoutNotFound
 
     public var errorDescription: String? {
         switch self {
@@ -58,6 +60,10 @@ public enum LauncherError: LocalizedError, Sendable {
             return "Godot was downloaded, but Godot.app couldn't be found inside it."
         case .godotNotSupported(let reason):
             return "This game can't run natively: \(reason) Switch 'Runs with' to Wine in the game's settings."
+        case .dxmtUnavailable:
+            return "Couldn't find a DXMT package to download. Try DXVK instead."
+        case .dxmtLayoutNotFound:
+            return "DXMT was downloaded, but its x86_64-windows / x86_64-unix folders couldn't be found."
         }
     }
 }

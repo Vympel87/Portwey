@@ -185,6 +185,16 @@ public final class SetupManager {
             runtimeError = error.localizedDescription
         }
     }
+    
+    public func importRuntime(from url: URL) async {
+        runtimeError = nil
+        do {
+            _ = try await WineRuntimeService.importRuntime(from: url)
+            refreshRuntimes()
+        } catch {
+            runtimeError = error.localizedDescription
+        }
+    }
 
     // MARK: - Installing during setup
 

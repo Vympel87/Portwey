@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import UniformTypeIdentifiers
 import LauncherCore
 
 struct RuntimesView: View {
@@ -39,11 +40,27 @@ struct RuntimesView: View {
                 )
 
                 runtimeCard(
+                    title: "DXMT (experimental)",
+                    icon: "square.stack.3d.forward.dottedline",
+                    status: DXMTService.installed()?.tag ?? "Downloaded on first use",
+                    isInstalled: DXMTService.installed() != nil,
+                    details: [("Needs", "A Wine built from CrossOver's source (use Import… above)")]
+                )
+
+                runtimeCard(
                     title: "NW.js (native RPG Maker MV/MZ)",
                     icon: "macwindow",
                     status: NWJSService.installed()?.version ?? "Downloaded on first use",
                     isInstalled: NWJSService.installed() != nil,
                     details: [("Purpose", "Runs RPG Maker MV/MZ games natively, without Wine")]
+                )
+
+                runtimeCard(
+                    title: "Godot (native Godot games)",
+                    icon: "gamecontroller",
+                    status: godotStatus,
+                    isInstalled: !GodotService.installedRuntimes().isEmpty,
+                    details: [("Purpose", "Runs Godot games natively with the matching engine version")]
                 )
 
                 HStack(spacing: 12) {
@@ -79,7 +96,7 @@ struct RuntimesView: View {
                 setup.uninstallRuntime(runtime)
             }
         } message: { _ in
-            Text("Its files and any DXVK copies made from it will be removed. You can install it again later.")
+            Text("Its files and any DXVK/DXMT copies made from it will be removed. You can install it again later.")
         }
     }
 
@@ -91,6 +108,14 @@ struct RuntimesView: View {
                 Label("Wine", systemImage: "wineglass")
                     .font(.title3.bold())
                 Spacer()
+                Button {
+                    chooseWineToImport()
+                } label: {
+                    Label("Import…", systemImage: "square.and.arrow.down")
+                }
+                .help("Add a Wine build you already have, for example one built from CrossOver's source (needed for DXMT)")
+                .disabled(setup.runtimeTask != nil)
+
                 Button {
                     showAvailable.toggle()
                     if showAvailable && setup.availableReleases.isEmpty {
@@ -129,6 +154,19 @@ struct RuntimesView: View {
         .background(.quaternary.opacity(0.35), in: RoundedRectangle(cornerRadius: 14))
     }
 
+    private func chooseWineToImport() {
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = true
+        panel.allowedContentTypes = [.applicationBundle, .folder]
+        panel.allowsMultipleSelection = false
+        panel.message = "Choose a Wine app or folder (it must contain bin/wine)"
+        panel.prompt = "Import"
+
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        Task { await setup.importRuntime(from: url) }
+    }
+
     private func installedRow(_ runtime: RuntimeInfo) -> some View {
         let isDefault = runtime.installPath == setup.runtime?.installPath
 
@@ -144,6 +182,14 @@ struct RuntimesView: View {
                             .padding(.vertical, 2)
                             .foregroundStyle(.green)
                             .background(.green.opacity(0.15), in: Capsule())
+                    }
+                    if runtime.tag.hasPrefix("imported-") {
+                        Text("Imported")
+                            .font(.caption2.weight(.semibold))
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .foregroundStyle(.blue)
+                            .background(.blue.opacity(0.15), in: Capsule())
                     }
                 }
                 Text(runtime.tag)
@@ -257,6 +303,11 @@ struct RuntimesView: View {
         case .some(false): return "Not installed"
         case .none: return "Checking…"
         }
+    }
+
+    private var godotStatus: String {
+        let versions = GodotService.installedRuntimes().map(\.version)
+        return versions.isEmpty ? "Downloaded on first use" : versions.joined(separator: ", ")
     }
 
     private func runtimeCard(

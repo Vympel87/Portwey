@@ -2,13 +2,15 @@ import Foundation
 
 public enum GraphicsBackend: String, Codable, CaseIterable, Identifiable, Sendable {
     case dxvk
+    case dxmt
     case wined3d
 
     public var id: String { rawValue }
 
     public var displayName: String {
         switch self {
-        case .dxvk: return "DXVK (DirectX 10/11 → Metal)"
+        case .dxvk: return "DXVK (DirectX 10/11 → Vulkan → Metal)"
+        case .dxmt: return "DXMT (DirectX 11 → Metal, experimental)"
         case .wined3d: return "WineD3D (OpenGL)"
         }
     }
@@ -16,6 +18,7 @@ public enum GraphicsBackend: String, Codable, CaseIterable, Identifiable, Sendab
     public var shortName: String {
         switch self {
         case .dxvk: return "DXVK"
+        case .dxmt: return "DXMT"
         case .wined3d: return "WineD3D"
         }
     }
