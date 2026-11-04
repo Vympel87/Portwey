@@ -7,6 +7,12 @@ struct PortweyCommands: Commands {
     let runner: GameRunner
 
     var body: some Commands {
+        CommandGroup(after: .appInfo) {
+            Button("Check for Updates…") {
+                Task { await UpdateChecker.check(userInitiated: true) }
+            }
+        }
+
         CommandGroup(replacing: .newItem) {
             Button("Add Game…") {
                 appState.requestAddGame()

@@ -49,6 +49,7 @@ struct PortweyApp: App {
             SettingsView()
                 .environment(setup)
                 .environment(library)
+                .environment(runner)
         }
 
         MenuBarExtra("Portwey", systemImage: "gamecontroller.fill", isInserted: $showMenuBarExtra) {

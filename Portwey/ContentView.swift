@@ -29,6 +29,9 @@ struct ContentView: View {
         .task {
             await library.refreshPresets()
         }
+        .task {
+            await UpdateChecker.checkAtLaunchIfNeeded()
+        }
     }
 }
 

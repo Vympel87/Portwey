@@ -10,14 +10,19 @@ struct SettingsView: View {
             AboutSettingsView()
                 .tabItem { Label("About", systemImage: "info.circle") }
         }
-        .frame(width: 580, height: 480)
+        .frame(width: 580, height: 560)
     }
 }
 
 // MARK: - General
 
 private struct GeneralSettingsView: View {
+    @Environment(GameRunner.self) private var runner
+    @Environment(SetupManager.self) private var setup
+
     @AppStorage("showMenuBarExtra") private var showMenuBarExtra = true
+    @AppStorage(UpdateChecker.autoCheckKey) private var autoCheckUpdates = true
+
     @State private var downloadsSize: Int64?
     @State private var message: String?
 
@@ -33,6 +38,19 @@ private struct GeneralSettingsView: View {
                 Text("Quick access to recent games and to the game that's running, even when the main window is closed.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
+            }
+
+            Section("Updates") {
+                Toggle("Check for updates automatically", isOn: $autoCheckUpdates)
+                LabeledContent("Current version") {
+                    HStack {
+                        Text(UpdateChecker.currentVersion)
+                            .foregroundStyle(.secondary)
+                        Button("Check Now") {
+                            Task { await UpdateChecker.check(userInitiated: true) }
+                        }
+                    }
+                }
             }
 
             Section("Storage") {
@@ -58,6 +76,17 @@ private struct GeneralSettingsView: View {
                     }
                 }
                 Text("Leftover installer files. Clearing them doesn't affect installed games or runtimes.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Section("Uninstall") {
+                LabeledContent("Remove Portwey completely") {
+                    Button("Uninstall Portwey…", role: .destructive) {
+                        Task { await Uninstaller.confirmAndUninstall(runner: runner, setup: setup) }
+                    }
+                }
+                Text("Dragging Portwey to the Trash leaves its runtimes, bottles and imported games behind. This removes everything.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

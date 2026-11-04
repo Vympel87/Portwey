@@ -85,12 +85,12 @@ You only need to do this once.
 
 ## Tested games
 
-| Game / engine                       | Runs with    | Graphics | Status                                  |
-| ----------------------------------- | ------------ | -------- | --------------------------------------- |
-| Starmaker Story (Unity, DirectX 11) | Wine         | DXVK     | ✅ Works                                |
-| RPG Maker MV game (v1.6)            | Native NW.js | Metal    | ✅ Works                                |
-| Godot game                          | Native Godot | Metal    | ✅ Works                                |
-| Steam client                        | Wine         | —       | ⚠️ Window stays black with stock Wine |
+| Game / engine            | Runs with    | Graphics | Status                                  |
+| ------------------------ | ------------ | -------- | --------------------------------------- |
+| Unity, DirectX 11        | Wine         | DXVK     | ✅ Works                                |
+| RPG Maker MV game (v1.6) | Native NW.js | Metal    | ✅ Works                                |
+| Godot game               | Native Godot | Metal    | ✅ Works                                |
+| Steam client             | Wine         | —       | ⚠️ Window stays black with stock Wine |
 
 Tried a game? Open an issue with the result, or share its preset from the Presets page.
 
