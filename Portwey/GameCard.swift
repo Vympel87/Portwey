@@ -64,7 +64,9 @@ struct GameCard<MenuContent: View>: View {
 
                     Spacer(minLength: 4)
 
-                    if game.launchMethod.isNative {
+                    if game.isSteamGame {
+                        badge("Steam", color: .blue)
+                    } else if game.launchMethod.isNative {
                         badge("Native", color: .green)
                     }
                     if let engine = game.engine, engine != .unknown {

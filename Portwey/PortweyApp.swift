@@ -13,11 +13,13 @@ struct PortweyApp: App {
     @State private var setup = SetupManager()
     @State private var library: GameLibrary
     @State private var runner: GameRunner
+    @State private var steam: SteamManager
 
     init() {
         let library = GameLibrary()
         _library = State(initialValue: library)
         _runner = State(initialValue: GameRunner(library: library))
+        _steam = State(initialValue: SteamManager(library: library))
     }
 
     var body: some Scene {
@@ -26,6 +28,7 @@ struct PortweyApp: App {
                 .environment(setup)
                 .environment(library)
                 .environment(runner)
+                .environment(steam)
                 .frame(minWidth: 960, minHeight: 640)
         }
     }

@@ -5,6 +5,8 @@ import LauncherCore
 
 enum LibraryFilter: String, CaseIterable, Identifiable {
     case all = "All games"
+    case steam = "Steam"
+    case added = "Added games"
     case recent = "Recently played"
     case notPlayed = "Not played yet"
 
@@ -33,6 +35,10 @@ struct LibraryView: View {
         switch filter {
         case .all:
             break
+        case .steam:
+            games = games.filter(\.isSteamGame)
+        case .added:
+            games = games.filter { !$0.isSteamGame }
         case .recent:
             games = games
                 .filter { $0.lastPlayedAt != nil }

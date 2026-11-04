@@ -3,6 +3,7 @@ import LauncherCore
 
 enum SidebarItem: Hashable {
     case library
+    case steam
     case presets
     case bottles
     case runtimes
@@ -17,6 +18,8 @@ struct MainView: View {
                 Section("Portwey") {
                     Label("Library", systemImage: "square.grid.2x2")
                         .tag(SidebarItem.library)
+                    Label("Steam (beta)", systemImage: "cloud")
+                        .tag(SidebarItem.steam)
                     Label("Presets", systemImage: "slider.horizontal.3")
                         .tag(SidebarItem.presets)
                     Label("Bottles", systemImage: "shippingbox")
@@ -34,6 +37,8 @@ struct MainView: View {
             switch selection ?? .library {
             case .library:
                 LibraryView()
+            case .steam:
+                SteamView()
             case .presets:
                 PresetsView()
             case .bottles:

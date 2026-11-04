@@ -5,7 +5,7 @@ import Observation
 @Observable
 public final class GameLibrary {
     public private(set) var games: [Game] = []
-    /// Presets from the Portwey repo (cached copy until a fresh one is downloaded).
+    /// Presets from the Portwey presets repo (cached copy until a fresh one is downloaded).
     public private(set) var communityPresets: [GamePreset] = PresetService.cachedPresets()
     /// Presets saved on this Mac.
     public private(set) var myPresets: [GamePreset] = PresetService.loadMyPresets()
@@ -45,7 +45,7 @@ public final class GameLibrary {
 
     /// Removes the game from the library.
     /// With `deleteGameFiles`, also deletes its folder if Portwey extracted it (from a .zip) into its games folder.
-    /// A game's own bottle is deleted too once no other game uses it.
+    /// A game's own bottle is deleted too once no other game uses it (never the shared or Steam bottle).
     public func remove(_ game: Game, deleteGameFiles: Bool = false) {
         if deleteGameFiles, let folder = managedFolder(for: game) {
             try? FileManager.default.removeItem(at: folder)
@@ -56,6 +56,7 @@ public final class GameLibrary {
         games.removeAll { $0.id == game.id }
 
         if game.bottleName != BottleManager.defaultBottleName,
+           game.bottleName != SteamService.bottleName,
            !games.contains(where: { $0.bottleName == game.bottleName }) {
             try? FileManager.default.removeItem(at: BottleManager.bottleURL(named: game.bottleName))
         }
@@ -66,6 +67,58 @@ public final class GameLibrary {
         guard let index = games.firstIndex(where: { $0.id == gameID }) else { return }
         games[index].graphicsBackend = backend
         save()
+    }
+
+    // MARK: - Steam
+
+    /// Adds newly installed Steam games and removes ones that were uninstalled.
+    @discardableResult
+    public func syncSteamGames() async -> (added: Int, removed: Int) {
+        let apps = SteamService.installedApps().filter(\.isFullyInstalled)
+        let installedIDs = Set(apps.map(\.id))
+        var added = 0
+
+        for app in apps where !games.contains(where: { $0.steamAppID == app.id }) {
+            var game = Game(
+                title: app.name,
+                executablePath: SteamService.steamExecutable.path,
+                bottleName: SteamService.bottleName,
+                launchMethod: .wine,
+                steamAppID: app.id
+            )
+            if let executable = GameImporter.findExecutables(in: app.installDirectory).first {
+                game.engine = GameEngineDetector.detect(executable: executable)
+            } else {
+                game.engine = .unknown
+            }
+            games.append(game)
+            added += 1
+
+            // Steam's store artwork as the cover (the game may have moved in the list while we waited).
+            if let data = await SteamService.coverImageData(for: app.id),
+               let index = games.firstIndex(where: { $0.id == game.id }) {
+                let fileName = "\(game.id.uuidString)-steam.jpg"
+                do {
+                    try AppPaths.ensureDirectories()
+                    try data.write(to: AppPaths.covers.appendingPathComponent(fileName), options: .atomic)
+                    games[index].coverFileName = fileName
+                } catch {
+                    print("Couldn't save Steam cover for \(app.name): \(error)")
+                }
+            }
+        }
+
+        let uninstalled = games.filter { game in
+            guard let id = game.steamAppID else { return false }
+            return !installedIDs.contains(id)
+        }
+        for game in uninstalled {
+            remove(game)
+        }
+
+        sortGames()
+        save()
+        return (added, uninstalled.count)
     }
 
     // MARK: - Presets
@@ -137,7 +190,7 @@ public final class GameLibrary {
         save()
     }
 
-    /// A complete presets.json for the repo: community presets plus yours.
+    /// A complete presets.json for the presets repo: community presets plus yours.
     public func exportPresetsFile() throws -> Data {
         try PresetService.exportData(community: communityPresets, mine: myPresets)
     }
@@ -156,7 +209,7 @@ public final class GameLibrary {
         if let environment = settings.environment {
             games[index].environment = environment
         }
-        if let ownBottle = settings.ownBottle {
+        if let ownBottle = settings.ownBottle, !games[index].isSteamGame {
             games[index].bottleName = ownBottle
                 ? BottleManager.ownBottleName(for: games[index].id)
                 : BottleManager.defaultBottleName
@@ -242,7 +295,9 @@ public final class GameLibrary {
     @discardableResult
     private func extractIcon(at index: Int) -> Bool {
         let game = games[index]
-        guard game.executableExists, let png = ExeIconExtractor.extractPNG(from: game.executableURL) else {
+        guard !game.isSteamGame,
+              game.executableExists,
+              let png = ExeIconExtractor.extractPNG(from: game.executableURL) else {
             return false
         }
         do {
@@ -291,7 +346,7 @@ public final class GameLibrary {
 
         // Fill in things older library entries don't have yet.
         var changed = false
-        for index in games.indices where games[index].executableExists {
+        for index in games.indices where games[index].executableExists && !games[index].isSteamGame {
             if games[index].engine == nil {
                 detectEngine(at: index)
                 changed = true

@@ -21,6 +21,8 @@ public enum LauncherError: LocalizedError, Sendable {
     case godotNotSupported(String)
     case dxmtUnavailable
     case dxmtLayoutNotFound
+    case steamInstallFailed
+    case steamNotInstalled
 
     public var errorDescription: String? {
         switch self {
@@ -64,6 +66,10 @@ public enum LauncherError: LocalizedError, Sendable {
             return "Couldn't find a DXMT package to download. Try DXVK instead."
         case .dxmtLayoutNotFound:
             return "DXMT was downloaded, but its x86_64-windows / x86_64-unix folders couldn't be found."
+        case .steamInstallFailed:
+            return "Steam's installer finished, but steam.exe couldn't be found. Try installing again."
+        case .steamNotInstalled:
+            return "Steam isn't installed yet. Install it from the Steam page first."
         }
     }
 }

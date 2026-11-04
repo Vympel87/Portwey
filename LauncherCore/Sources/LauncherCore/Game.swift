@@ -38,6 +38,8 @@ public struct Game: Codable, Identifiable, Sendable, Hashable {
     public var iconFileName: String?
     /// The preset applied to this game, if any.
     public var presetID: String?
+    /// Set for games installed through Steam; Steam launches them.
+    public var steamAppID: Int?
     public var addedAt: Date
     public var lastPlayedAt: Date?
     public var playtimeSeconds: TimeInterval
@@ -55,6 +57,7 @@ public struct Game: Codable, Identifiable, Sendable, Hashable {
         coverFileName: String? = nil,
         iconFileName: String? = nil,
         presetID: String? = nil,
+        steamAppID: Int? = nil,
         addedAt: Date = Date(),
         lastPlayedAt: Date? = nil,
         playtimeSeconds: TimeInterval = 0
@@ -71,6 +74,7 @@ public struct Game: Codable, Identifiable, Sendable, Hashable {
         self.coverFileName = coverFileName
         self.iconFileName = iconFileName
         self.presetID = presetID
+        self.steamAppID = steamAppID
         self.addedAt = addedAt
         self.lastPlayedAt = lastPlayedAt
         self.playtimeSeconds = playtimeSeconds
@@ -80,7 +84,8 @@ public struct Game: Codable, Identifiable, Sendable, Hashable {
 
     private enum CodingKeys: String, CodingKey {
         case id, title, executablePath, arguments, environment, bottleName, graphicsBackend
-        case engine, launchMethod, coverFileName, iconFileName, presetID, addedAt, lastPlayedAt, playtimeSeconds
+        case engine, launchMethod, coverFileName, iconFileName, presetID, steamAppID
+        case addedAt, lastPlayedAt, playtimeSeconds
     }
 
     public init(from decoder: Decoder) throws {
@@ -97,6 +102,7 @@ public struct Game: Codable, Identifiable, Sendable, Hashable {
         coverFileName = try container.decodeIfPresent(String.self, forKey: .coverFileName)
         iconFileName = try container.decodeIfPresent(String.self, forKey: .iconFileName)
         presetID = try container.decodeIfPresent(String.self, forKey: .presetID)
+        steamAppID = try container.decodeIfPresent(Int.self, forKey: .steamAppID)
         addedAt = try container.decodeIfPresent(Date.self, forKey: .addedAt) ?? Date()
         lastPlayedAt = try container.decodeIfPresent(Date.self, forKey: .lastPlayedAt)
         playtimeSeconds = try container.decodeIfPresent(TimeInterval.self, forKey: .playtimeSeconds) ?? 0
@@ -112,6 +118,8 @@ public struct Game: Codable, Identifiable, Sendable, Hashable {
     public var executableExists: Bool {
         FileManager.default.fileExists(atPath: executablePath)
     }
+
+    public var isSteamGame: Bool { steamAppID != nil }
 
     /// Custom cover picked by the user.
     public var coverURL: URL? {

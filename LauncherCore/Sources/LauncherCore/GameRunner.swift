@@ -22,6 +22,7 @@ public final class GameRunner {
     private var process: Process?
     private var startedAt: Date?
     private var runningGameID: UUID?
+    private var runningIsSteamGame = false
     private var runningBottle: URL?
     private var runningRuntime: RuntimeInfo?
     private let maxLogLines = 3000
@@ -48,7 +49,9 @@ public final class GameRunner {
 
         do {
             guard game.executableExists else {
-                throw LauncherError.executableNotFound(game.executablePath)
+                throw game.isSteamGame
+                    ? LauncherError.steamNotInstalled
+                    : LauncherError.executableNotFound(game.executablePath)
             }
 
             let process: Process
@@ -67,6 +70,7 @@ public final class GameRunner {
             self.process = process
             startedAt = Date()
             runningGameID = game.id
+            runningIsSteamGame = game.isSteamGame
             state = .running(gameID: game.id)
         } catch {
             lastError = error.localizedDescription
@@ -124,14 +128,22 @@ public final class GameRunner {
         extraEnvironment.merge(game.environment) { _, custom in custom }
         logCustomSettings(for: game)
 
+        // Steam games: start Steam quietly (if it isn't running) and ask it to launch the game.
+        // Steam's UI renders on the CPU so its window isn't black, while the game itself keeps the chosen backend.
+        var gameArguments = game.arguments
+        if let appID = game.steamAppID {
+            gameArguments = SteamService.clientArguments + ["-silent", "-applaunch", String(appID)] + game.arguments
+            log("Steam game \(appID): Steam starts the game. If Steam asks you to sign in, do that in its window.")
+        }
+
         let process = Process()
         process.executableURL = launchRuntime.wineBinaryURL
-        process.arguments = [game.executablePath] + game.arguments
+        process.arguments = [game.executablePath] + gameArguments
         process.currentDirectoryURL = game.workingDirectoryURL
         process.environment = BottleManager.environment(for: bottle, extra: extraEnvironment)
 
         log("Launching \(game.title) with Wine…")
-        log("$ WINEPREFIX=\"\(bottle.path)\" \"\(launchRuntime.wineBinaryPath)\" \"\(game.executablePath)\"")
+        log("$ WINEPREFIX=\"\(bottle.path)\" \"\(launchRuntime.wineBinaryPath)\" \"\(game.executablePath)\" \(gameArguments.joined(separator: " "))")
 
         runningBottle = bottle
         runningRuntime = launchRuntime
@@ -232,13 +244,16 @@ public final class GameRunner {
 
     private func didTerminate(exitCode: Int32) {
         if let id = runningGameID, let startedAt {
-            library.recordSession(gameID: id, duration: Date().timeIntervalSince(startedAt))
+            // Steam tracks playtime for its own games, and our process is Steam rather than the game.
+            let duration = runningIsSteamGame ? 0 : Date().timeIntervalSince(startedAt)
+            library.recordSession(gameID: id, duration: duration)
         }
-        log("Game exited with code \(exitCode)")
+        log(runningIsSteamGame ? "Steam closed (exit code \(exitCode))" : "Game exited with code \(exitCode)")
 
         process = nil
         startedAt = nil
         runningGameID = nil
+        runningIsSteamGame = false
         runningBottle = nil
         runningRuntime = nil
         state = .idle
