@@ -51,6 +51,8 @@ public final class GameRunner {
                 process = try await makeWineProcess(for: game, runtime: runtime)
             case .nwjs:
                 process = try await makeNWJSProcess(for: game)
+            case .godot:
+                process = try await makeGodotProcess(for: game)
             }
 
             attachOutput(to: process)
@@ -147,6 +149,44 @@ public final class GameRunner {
         log("Runner: native NW.js \(nwjs.version) (no Wine, no Rosetta)")
         log("Launching \(game.title)…")
         log("$ \"\(nwjs.executableURL.path)\" \(arguments.map { "\"\($0)\"" }.joined(separator: " "))")
+
+        runningBottle = nil
+        runningRuntime = nil
+        return process
+    }
+
+    // MARK: - Native Godot
+
+    private func makeGodotProcess(for game: Game) async throws -> Process {
+        let pack: GodotPackInfo
+        switch GodotService.nativeSupport(for: game.executableURL) {
+        case .supported(let info):
+            pack = info
+        case .unsupported(let reason):
+            throw LauncherError.godotNotSupported(reason)
+        }
+
+        let location = pack.isEmbedded ? "data inside the .exe" : pack.packURL.lastPathComponent
+        log("Godot \(pack.version) game detected (\(location))")
+
+        let godot = try await GodotService.ensureInstalled(version: pack.version) { [weak self] line in
+            Task { @MainActor in self?.log(line) }
+        }
+        logCustomSettings(for: game)
+
+        // --main-pack runs the game's data with the matching Godot build, as a game (not the editor).
+        let arguments = ["--main-pack", pack.packURL.path] + game.arguments
+
+        let process = Process()
+        process.executableURL = godot.executableURL
+        process.arguments = arguments
+        process.currentDirectoryURL = game.workingDirectoryURL
+        process.environment = ProcessInfo.processInfo.environment
+            .merging(game.environment) { _, custom in custom }
+
+        log("Runner: native Godot \(godot.version) (no Wine, no Rosetta)")
+        log("Launching \(game.title)…")
+        log("$ \"\(godot.executableURL.path)\" \(arguments.map { "\"\($0)\"" }.joined(separator: " "))")
 
         runningBottle = nil
         runningRuntime = nil

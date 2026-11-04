@@ -25,15 +25,20 @@ public enum GameEngine: String, Codable, CaseIterable, Sendable {
         }
     }
 
-    /// RPG Maker MV/MZ games are HTML5 apps wrapped in NW.js, so they can run on the macOS build of NW.js.
-    public var supportsNativeNWJS: Bool {
-        self == .rpgMakerMV || self == .rpgMakerMZ
+    /// How this engine can run natively on macOS, if it can.
+    public var nativeLaunchMethod: LaunchMethod? {
+        switch self {
+        case .rpgMakerMV, .rpgMakerMZ: return .nwjs
+        case .godot: return .godot
+        default: return nil
+        }
     }
 }
 
 public enum LaunchMethod: String, Codable, CaseIterable, Identifiable, Sendable {
     case wine
     case nwjs
+    case godot
 
     public var id: String { rawValue }
 
@@ -41,14 +46,16 @@ public enum LaunchMethod: String, Codable, CaseIterable, Identifiable, Sendable 
         switch self {
         case .wine: return "Wine (Windows version)"
         case .nwjs: return "Native (NW.js for macOS)"
+        case .godot: return "Native (Godot for macOS)"
         }
     }
 
     public var shortName: String {
-        switch self {
-        case .wine: return "Wine"
-        case .nwjs: return "Native"
-        }
+        isNative ? "Native" : "Wine"
+    }
+
+    public var isNative: Bool {
+        self != .wine
     }
 }
 
@@ -74,6 +81,8 @@ public enum GameEngineDetector {
         if exists("renpy") && exists("lib") { return .renpy }
         if exists("Game.rgss3a") || exists("System/RGSS301.dll") || exists("System/RGSS300.dll") { return .rpgMakerVXAce }
         if exists("Engine") || exists("\(name)/Binaries") { return .unreal }
+        // Godot games exported as a single .exe carry their data at the end of the file.
+        if GodotPackInfo.read(from: executable) != nil { return .godot }
         return .unknown
     }
 

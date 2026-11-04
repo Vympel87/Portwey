@@ -16,6 +16,9 @@ public enum LauncherError: LocalizedError, Sendable {
     case nwjsUnavailable
     case nwjsAppNotFound
     case packageJSONMissing(String)
+    case godotVersionUnavailable(String)
+    case godotAppNotFound
+    case godotNotSupported(String)
 
     public var errorDescription: String? {
         switch self {
@@ -49,6 +52,12 @@ public enum LauncherError: LocalizedError, Sendable {
             return "NW.js was downloaded, but nwjs.app couldn't be found inside it."
         case .packageJSONMissing(let path):
             return "This game has no readable package.json, so it can't run natively: \(path)"
+        case .godotVersionUnavailable(let version):
+            return "Couldn't find a macOS download for Godot \(version). Try running the game with Wine instead."
+        case .godotAppNotFound:
+            return "Godot was downloaded, but Godot.app couldn't be found inside it."
+        case .godotNotSupported(let reason):
+            return "This game can't run natively: \(reason) Switch 'Runs with' to Wine in the game's settings."
         }
     }
 }

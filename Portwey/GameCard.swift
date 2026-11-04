@@ -64,7 +64,7 @@ struct GameCard<MenuContent: View>: View {
 
                     Spacer(minLength: 4)
 
-                    if game.launchMethod == .nwjs {
+                    if game.launchMethod.isNative {
                         badge("Native", color: .green)
                     }
                     if let engine = game.engine, engine != .unknown {

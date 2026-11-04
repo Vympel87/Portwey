@@ -85,10 +85,20 @@ public final class GameLibrary {
 
     /// Detects the engine and picks the best way to run the game.
     private func detectEngine(at index: Int) {
-        let engine = GameEngineDetector.detect(executable: games[index].executableURL)
+        let executable = games[index].executableURL
+        let engine = GameEngineDetector.detect(executable: executable)
         games[index].engine = engine
-        if engine.supportsNativeNWJS {
+
+        switch engine.nativeLaunchMethod {
+        case .nwjs:
             games[index].launchMethod = .nwjs
+        case .godot:
+            // Only go native when the game has no encrypted data, .NET code or Windows plugins.
+            if GodotService.nativeSupport(for: executable).isSupported {
+                games[index].launchMethod = .godot
+            }
+        default:
+            break
         }
     }
 

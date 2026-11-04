@@ -13,6 +13,12 @@ public enum GitHubClient {
         return try await fetch([GitHubRelease].self, from: url)
     }
 
+    /// A specific release by its tag, e.g. "4.3-stable".
+    public static func release(owner: String, repo: String, tag: String) async throws -> GitHubRelease {
+        let url = URL(string: "https://api.github.com/repos/\(owner)/\(repo)/releases/tags/\(tag)")!
+        return try await fetch(GitHubRelease.self, from: url)
+    }
+
     private static func fetch<T: Decodable>(_ type: T.Type, from url: URL) async throws -> T {
         var request = URLRequest(url: url)
         request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")

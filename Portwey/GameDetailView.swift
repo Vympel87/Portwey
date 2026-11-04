@@ -82,7 +82,7 @@ struct GameDetailView: View {
 
     private func hero(for game: Game) -> some View {
         let status = GameStatus(game: game, runner: runner)
-        let runnerLabel = game.launchMethod == .nwjs ? "Native" : game.graphicsBackend.shortName
+        let runnerLabel = game.launchMethod.isNative ? "Native" : game.graphicsBackend.shortName
 
         return ZStack(alignment: .bottomLeading) {
             GameCoverView(game: game, iconSize: 120, iconOpacity: 0.15)
@@ -194,14 +194,19 @@ struct GameDetailView: View {
     // MARK: - Overview
 
     private func overview(for game: Game) -> some View {
-        let rows: [(String, String)] = [
+        var rows: [(String, String)] = [
             ("Playtime", game.playtimeText),
             ("Last played", game.lastPlayedText),
             ("Added", game.addedAt.formatted(date: .abbreviated, time: .omitted)),
-            ("Engine", game.engine?.displayName ?? "Unknown"),
+            ("Engine", game.engine?.displayName ?? "Unknown")
+        ]
+        if game.engine == .godot, let pack = GodotService.findPack(for: game.executableURL) {
+            rows.append(("Godot version", pack.version + (pack.isEmbedded ? " (data inside .exe)" : "")))
+        }
+        rows += [
             ("Runs with", game.launchMethod.displayName),
-            ("Graphics", game.launchMethod == .nwjs ? "Metal (native)" : game.graphicsBackend.displayName),
-            ("Bottle", game.launchMethod == .nwjs ? "Not needed" : bottleDisplayName(game.bottleName)),
+            ("Graphics", game.launchMethod.isNative ? "Metal (native)" : game.graphicsBackend.displayName),
+            ("Bottle", game.launchMethod.isNative ? "Not needed" : bottleDisplayName(game.bottleName)),
             ("Executable", game.executablePath)
         ]
 

@@ -7,6 +7,8 @@ struct GameSettingsView: View {
 
     let gameID: UUID
     let engine: GameEngine?
+    /// Why this game can't use its native runner, if that's the case.
+    let nativeIssue: String?
 
     @State private var title: String
     @State private var launchMethod: LaunchMethod
@@ -18,6 +20,9 @@ struct GameSettingsView: View {
     init(game: Game) {
         gameID = game.id
         engine = game.engine
+        nativeIssue = game.engine?.nativeLaunchMethod == .godot
+            ? GodotService.nativeSupport(for: game.executableURL).reason
+            : nil
         _title = State(initialValue: game.title)
         _launchMethod = State(initialValue: game.launchMethod)
         _backend = State(initialValue: game.graphicsBackend)
@@ -30,6 +35,22 @@ struct GameSettingsView: View {
 
     private var isLocked: Bool {
         runner.activeGameID == gameID
+    }
+
+    /// Wine, plus this engine's native runner if it has one.
+    private var launchOptions: [LaunchMethod] {
+        [.wine] + [engine?.nativeLaunchMethod].compactMap { $0 }
+    }
+
+    private var nativeDescription: String {
+        switch engine?.nativeLaunchMethod {
+        case .nwjs:
+            return "\(engine?.displayName ?? "This game") runs natively on macOS through NW.js: no Wine, no Rosetta and better performance."
+        case .godot:
+            return "Runs on the macOS build of the same Godot version the game was made with: no Wine, no Rosetta. Saves are kept separately from the Wine version."
+        default:
+            return ""
+        }
     }
 
     var body: some View {
@@ -48,19 +69,25 @@ struct GameSettingsView: View {
                 .padding(8)
             }
 
-            if engine?.supportsNativeNWJS == true {
+            if engine?.nativeLaunchMethod != nil {
                 GroupBox("Runs with") {
                     VStack(alignment: .leading, spacing: 6) {
                         Picker("Runner", selection: $launchMethod) {
-                            ForEach(LaunchMethod.allCases) { item in
+                            ForEach(launchOptions) { item in
                                 Text(item.displayName).tag(item)
                             }
                         }
                         .frame(maxWidth: 420)
 
-                        Text("\(engine?.displayName ?? "This game") runs natively on macOS through NW.js: no Wine, no Rosetta and better performance. Switch to Wine only if the native version has problems.")
+                        Text(nativeDescription)
                             .font(.caption)
                             .foregroundStyle(.secondary)
+
+                        if let nativeIssue {
+                            Label(nativeIssue, systemImage: "exclamationmark.triangle.fill")
+                                .font(.caption)
+                                .foregroundStyle(.orange)
+                        }
                     }
                     .padding(8)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -93,9 +120,9 @@ struct GameSettingsView: View {
                         }
                     }
                     .frame(maxWidth: 420)
-                    .disabled(launchMethod == .nwjs)
+                    .disabled(launchMethod.isNative)
 
-                    Text(launchMethod == .nwjs
+                    Text(launchMethod.isNative
                          ? "Not used: native games render with Metal directly."
                          : "DXVK works best for DirectX 10/11 games (most Unity games). Use WineD3D for older DirectX 9 or OpenGL games.")
                         .font(.caption)
