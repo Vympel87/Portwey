@@ -1,0 +1,40 @@
+{
+  "version": 1,
+  "presets": [
+    {
+      "id": "engine-unity",
+      "title": "Unity games (DirectX 11)",
+      "match": { "engine": "unity" },
+      "settings": { "launchMethod": "wine", "graphicsBackend": "dxvk" },
+      "notes": "General starting point for Unity games. Most of them use DirectX 11, which runs best through DXVK. If the game stays black or crashes on start, try WineD3D."
+    },
+    {
+      "id": "engine-unreal",
+      "title": "Unreal games (DirectX 11)",
+      "match": { "engine": "unreal" },
+      "settings": { "launchMethod": "wine", "graphicsBackend": "dxvk", "ownBottle": true },
+      "notes": "Unreal games often install their own Windows components, so they get a bottle of their own. Games with anti-cheat usually won't run."
+    },
+    {
+      "id": "engine-gamemaker",
+      "title": "GameMaker games",
+      "match": { "engine": "gameMaker" },
+      "settings": { "launchMethod": "wine", "graphicsBackend": "dxvk" },
+      "notes": "GameMaker Studio 2 games use DirectX 11 and run well through DXVK. Older GameMaker games may work better with WineD3D."
+    },
+    {
+      "id": "engine-renpy",
+      "title": "Ren'Py games",
+      "match": { "engine": "renpy" },
+      "settings": { "launchMethod": "wine", "graphicsBackend": "wined3d" },
+      "notes": "Many Ren'Py games also come with a Mac version; check the download page first. Otherwise this runs the Windows version."
+    },
+    {
+      "id": "engine-rpgmaker-vxace",
+      "title": "RPG Maker VX Ace games",
+      "match": { "engine": "rpgMakerVXAce" },
+      "settings": { "launchMethod": "wine", "graphicsBackend": "wined3d" },
+      "notes": "Runs through Wine. If the game asks for the RPG Maker VX Ace RTP, install it into the game's bottle; most releases already include what they need."
+    }
+  ]
+}
