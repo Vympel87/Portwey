@@ -19,10 +19,23 @@ public final class SetupManager {
         case failed(message: String)
     }
 
+    /// Progress of installing an extra Wine version from the Runtimes page.
+    public enum RuntimeTask: Equatable {
+        case downloading(name: String, progress: Double)
+        case extracting(name: String)
+        case verifying(name: String)
+    }
+
     public private(set) var phase: Phase = .idle
     public private(set) var logs: [String] = []
     public private(set) var runtime: RuntimeInfo?
     public private(set) var dxvk: DXVKInfo?
+
+    public private(set) var installedRuntimes: [RuntimeInfo] = []
+    public private(set) var availableReleases: [WineRelease] = []
+    public private(set) var isLoadingReleases = false
+    public private(set) var runtimeTask: RuntimeTask?
+    public private(set) var runtimeError: String?
 
     public var isReady: Bool { phase == .ready }
 
@@ -38,7 +51,10 @@ public final class SetupManager {
     public init() {
         runtime = WineRuntimeService.installedRuntime()
         dxvk = DXVKService.installed()
+        installedRuntimes = WineRuntimeService.installedRuntimes()
     }
+
+    // MARK: - First-run setup
 
     public func start() async {
         guard !isBusy else { return }
@@ -73,6 +89,7 @@ public final class SetupManager {
             } else {
                 runtime = try await installWine()
             }
+            refreshRuntimes()
 
             // 3. DXVK (optional: games fall back to WineD3D if this fails)
             if let existing = DXVKService.installed() {
@@ -94,51 +111,119 @@ public final class SetupManager {
         }
     }
 
-    // MARK: - Wine
+    // MARK: - Wine versions (Runtimes page)
+
+    public func refreshRuntimes() {
+        installedRuntimes = WineRuntimeService.installedRuntimes()
+    }
+
+    public func loadAvailableReleases() async {
+        isLoadingReleases = true
+        runtimeError = nil
+        defer { isLoadingReleases = false }
+        do {
+            availableReleases = try await WineRuntimeService.availableReleases()
+        } catch {
+            runtimeError = error.localizedDescription
+        }
+    }
+
+    public func installRuntime(_ release: WineRelease) async {
+        guard runtimeTask == nil else { return }
+        runtimeError = nil
+        let name = release.displayName
+        runtimeTask = .downloading(name: name, progress: 0)
+
+        let activity = ProcessInfo.processInfo.beginActivity(
+            options: [.userInitiated, .idleSystemSleepDisabled],
+            reason: "Installing \(name)"
+        )
+        defer { ProcessInfo.processInfo.endActivity(activity) }
+
+        do {
+            _ = try await WineRuntimeService.install(
+                release,
+                progress: { [weak self] value in
+                    Task { @MainActor in
+                        guard let self, case .downloading = self.runtimeTask else { return }
+                        self.runtimeTask = .downloading(name: name, progress: value)
+                    }
+                },
+                stage: { [weak self] stage in
+                    Task { @MainActor in
+                        guard let self else { return }
+                        switch stage {
+                        case .downloading: break
+                        case .extracting: self.runtimeTask = .extracting(name: name)
+                        case .verifying: self.runtimeTask = .verifying(name: name)
+                        }
+                    }
+                }
+            )
+            refreshRuntimes()
+        } catch {
+            runtimeError = error.localizedDescription
+        }
+        runtimeTask = nil
+    }
+
+    public func makeDefault(_ info: RuntimeInfo) {
+        do {
+            try WineRuntimeService.save(info)
+            runtime = info
+        } catch {
+            runtimeError = error.localizedDescription
+        }
+    }
+
+    public func uninstallRuntime(_ info: RuntimeInfo) {
+        guard info.installPath != runtime?.installPath else { return }
+        do {
+            try WineRuntimeService.uninstall(info)
+            refreshRuntimes()
+        } catch {
+            runtimeError = error.localizedDescription
+        }
+    }
+
+    // MARK: - Installing during setup
 
     private func installWine() async throws -> RuntimeInfo {
         phase = .fetchingRelease
         log("Checking GitHub for the latest Wine release…")
-        let release = try await WineRuntimeService.fetchLatestRelease()
-        let asset = try WineRuntimeService.pickAsset(from: release)
-        log("Release \(release.tagName), file \(asset.name) (\(formattedSize(asset.size)))")
+        let latest = try await WineRuntimeService.fetchLatestRelease()
+        let release = WineRelease(tag: latest.tagName, asset: try WineRuntimeService.pickAsset(from: latest))
+        log("\(release.displayName) (\(release.sizeText))")
 
         phase = .downloadingWine(progress: 0)
-        let archive = AppPaths.downloads.appendingPathComponent(asset.name)
-        try await WineRuntimeService.download(asset: asset, to: archive) { [weak self] value in
-            Task { @MainActor in
-                guard let self, case .downloadingWine = self.phase else { return }
-                self.phase = .downloadingWine(progress: value)
+        let info = try await WineRuntimeService.install(
+            release,
+            progress: { [weak self] value in
+                Task { @MainActor in
+                    guard let self, case .downloadingWine = self.phase else { return }
+                    self.phase = .downloadingWine(progress: value)
+                }
+            },
+            stage: { [weak self] stage in
+                Task { @MainActor in
+                    guard let self else { return }
+                    switch stage {
+                    case .downloading: break
+                    case .extracting:
+                        self.phase = .extractingWine
+                        self.log("Extracting Wine…")
+                    case .verifying:
+                        self.phase = .verifyingWine
+                        self.log("Test-running Wine through Rosetta…")
+                    }
+                }
             }
-        }
-        log("Download complete ✓")
-
-        phase = .extractingWine
-        log("Extracting Wine…")
-        let installDir = try await WineRuntimeService.extract(archive: archive, tag: release.tagName)
-        try? FileManager.default.removeItem(at: archive)
-
-        guard let wineBinary = WineRuntimeService.findWineBinary(in: installDir) else {
-            throw LauncherError.wineBinaryNotFound
-        }
-        log("Wine binary: \(wineBinary.path)")
-
-        phase = .verifyingWine
-        log("Test-running Wine through Rosetta…")
-        let version = try await WineRuntimeService.wineVersion(binary: wineBinary)
-        log("Wine is working: \(version) ✓")
-
-        let info = RuntimeInfo(
-            tag: release.tagName,
-            version: version,
-            installPath: installDir.path,
-            wineBinaryPath: wineBinary.path
         )
+
         try WineRuntimeService.save(info)
+        log("Wine is working: \(info.version) ✓")
         return info
     }
-
-    // MARK: - DXVK
 
     private func installDXVK() async throws -> DXVKInfo {
         phase = .fetchingDXVK

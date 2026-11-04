@@ -1,6 +1,6 @@
 import Foundation
 
-public struct RuntimeInfo: Codable, Sendable, Equatable {
+public struct RuntimeInfo: Codable, Sendable, Equatable, Hashable, Identifiable {
     public let tag: String
     public let version: String
     public let installPath: String
@@ -13,6 +13,7 @@ public struct RuntimeInfo: Codable, Sendable, Equatable {
         self.wineBinaryPath = wineBinaryPath
     }
 
+    public var id: String { installPath }
     public var wineBinaryURL: URL { URL(fileURLWithPath: wineBinaryPath) }
 }
 
@@ -20,18 +21,56 @@ public struct GitHubRelease: Decodable, Sendable {
     public let tagName: String
     public let assets: [Asset]
 
-    public struct Asset: Decodable, Sendable {
+    public struct Asset: Decodable, Sendable, Hashable {
         public let name: String
         public let browserDownloadUrl: URL
         public let size: Int
     }
 }
 
-public enum WineRuntimeService {
-    static let releasesURL = URL(string: "https://api.github.com/repos/Gcenx/macOS_Wine_builds/releases/latest")!
-    static let preferredAssetPrefix = "wine-devel"
+/// One downloadable Wine build (a release can offer several flavors: devel, staging, stable).
+public struct WineRelease: Identifiable, Sendable, Hashable {
+    public let tag: String
+    public let asset: GitHubRelease.Asset
 
-    /// Returns the installed runtime, if any, as long as its binary is still valid.
+    public var id: String { asset.name }
+
+    /// e.g. "wine-devel-11.21-osx64". Also used as the install folder name.
+    public var folderName: String {
+        asset.name.replacingOccurrences(of: ".tar.xz", with: "")
+    }
+
+    /// e.g. "Wine Devel 11.21"
+    public var displayName: String {
+        let trimmed = folderName
+            .replacingOccurrences(of: "wine-", with: "")
+            .replacingOccurrences(of: "-osx64", with: "")
+        guard let dash = trimmed.firstIndex(of: "-") else { return folderName }
+        let flavor = trimmed[..<dash].capitalized
+        let version = trimmed[trimmed.index(after: dash)...]
+        return "Wine \(flavor) \(version)"
+    }
+
+    public var sizeText: String {
+        ByteCountFormatter.string(fromByteCount: Int64(asset.size), countStyle: .file)
+    }
+}
+
+public enum WineInstallStage: Sendable {
+    case downloading
+    case extracting
+    case verifying
+}
+
+public enum WineRuntimeService {
+    static let owner = "Gcenx"
+    static let repo = "macOS_Wine_builds"
+    static let preferredAssetPrefix = "wine-devel"
+    static var registryFile: URL { AppPaths.runtimes.appendingPathComponent("wine-runtimes.json") }
+
+    // MARK: - Default runtime
+
+    /// The default runtime, if any, as long as its binary is still valid.
     public static func installedRuntime() -> RuntimeInfo? {
         guard
             let data = try? Data(contentsOf: AppPaths.runtimeInfoFile),
@@ -41,33 +80,137 @@ public enum WineRuntimeService {
         return info
     }
 
-    public static func fetchLatestRelease() async throws -> GitHubRelease {
-        var request = URLRequest(url: releasesURL)
-        request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
-        request.setValue("Portwey", forHTTPHeaderField: "User-Agent")
+    /// Makes this runtime the default.
+    public static func save(_ info: RuntimeInfo) throws {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        let data = try encoder.encode(info)
+        try data.write(to: AppPaths.runtimeInfoFile, options: .atomic)
+    }
 
-        let (data, response) = try await URLSession.shared.data(for: request)
-        guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
-            throw LauncherError.invalidResponse
+    // MARK: - All installed runtimes
+
+    /// Every installed Wine runtime. The default one is always included.
+    public static func installedRuntimes() -> [RuntimeInfo] {
+        var list = loadRegistry().filter { FileManager.default.isExecutableFile(atPath: $0.wineBinaryPath) }
+        if let current = installedRuntime(), !list.contains(where: { $0.installPath == current.installPath }) {
+            list.insert(current, at: 0)
+            saveRegistry(list)
         }
+        return list
+    }
 
-        let decoder = JSONDecoder()
-        decoder.keyDecodingStrategy = .convertFromSnakeCase
-        return try decoder.decode(GitHubRelease.self, from: data)
+    static func register(_ info: RuntimeInfo) {
+        var list = installedRuntimes()
+        list.removeAll { $0.installPath == info.installPath }
+        list.append(info)
+        saveRegistry(list)
+    }
+
+    static func unregister(_ info: RuntimeInfo) {
+        var list = loadRegistry()
+        list.removeAll { $0.installPath == info.installPath }
+        saveRegistry(list)
+    }
+
+    private static func loadRegistry() -> [RuntimeInfo] {
+        guard let data = try? Data(contentsOf: registryFile) else { return [] }
+        return (try? JSONDecoder().decode([RuntimeInfo].self, from: data)) ?? []
+    }
+
+    private static func saveRegistry(_ list: [RuntimeInfo]) {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        guard let data = try? encoder.encode(list) else { return }
+        try? AppPaths.ensureDirectories()
+        try? data.write(to: registryFile, options: .atomic)
+    }
+
+    // MARK: - Available releases
+
+    public static func fetchLatestRelease() async throws -> GitHubRelease {
+        try await GitHubClient.latestRelease(owner: owner, repo: repo)
+    }
+
+    /// Wine builds from recent releases, newest first.
+    public static func availableReleases() async throws -> [WineRelease] {
+        let releases = try await GitHubClient.releases(owner: owner, repo: repo, perPage: 30)
+        return releases.flatMap { release in
+            release.assets
+                .filter(isWineTarball)
+                .map { WineRelease(tag: release.tagName, asset: $0) }
+        }
+    }
+
+    static func isWineTarball(_ asset: GitHubRelease.Asset) -> Bool {
+        asset.name.hasPrefix("wine-") && asset.name.contains("osx64") && asset.name.hasSuffix(".tar.xz")
     }
 
     public static func pickAsset(from release: GitHubRelease) throws -> GitHubRelease.Asset {
-        let tarballs = release.assets.filter {
-            $0.name.hasSuffix(".tar.xz") && $0.name.contains("osx64")
-        }
+        let tarballs = release.assets.filter(isWineTarball)
         if let preferred = tarballs.first(where: { $0.name.hasPrefix(preferredAssetPrefix) }) {
             return preferred
         }
-        if let fallback = tarballs.first(where: { $0.name.hasPrefix("wine-") }) {
+        if let fallback = tarballs.first {
             return fallback
         }
         throw LauncherError.noWineAssetFound
     }
+
+    // MARK: - Install & uninstall
+
+    /// Downloads, extracts and tests a Wine build, then adds it to the installed list.
+    /// It does NOT make it the default; call `save` for that.
+    public static func install(
+        _ release: WineRelease,
+        progress: @escaping @Sendable (Double) -> Void,
+        stage: @escaping @Sendable (WineInstallStage) -> Void
+    ) async throws -> RuntimeInfo {
+        try AppPaths.ensureDirectories()
+
+        stage(.downloading)
+        let archive = AppPaths.downloads.appendingPathComponent(release.asset.name)
+        try await download(asset: release.asset, to: archive, progress: progress)
+
+        stage(.extracting)
+        let installDir = try await extract(archive: archive, tag: release.folderName)
+        try? FileManager.default.removeItem(at: archive)
+
+        guard let wineBinary = findWineBinary(in: installDir) else {
+            throw LauncherError.wineBinaryNotFound
+        }
+
+        stage(.verifying)
+        let version = try await wineVersion(binary: wineBinary)
+
+        let info = RuntimeInfo(
+            tag: release.folderName,
+            version: version,
+            installPath: installDir.path,
+            wineBinaryPath: wineBinary.path
+        )
+        register(info)
+        return info
+    }
+
+    /// Deletes a Wine runtime and any DXVK copies made from it.
+    public static func uninstall(_ info: RuntimeInfo) throws {
+        let fm = FileManager.default
+        let directory = URL(fileURLWithPath: info.installPath)
+
+        let variantPrefix = directory.lastPathComponent + "-dxvk-"
+        let siblings = (try? fm.contentsOfDirectory(at: AppPaths.runtimes, includingPropertiesForKeys: nil)) ?? []
+        for item in siblings where item.lastPathComponent.hasPrefix(variantPrefix) {
+            try? fm.removeItem(at: item)
+        }
+
+        if fm.fileExists(atPath: directory.path) {
+            try fm.removeItem(at: directory)
+        }
+        unregister(info)
+    }
+
+    // MARK: - Building blocks
 
     /// Downloads a release asset, retrying a few times if the connection drops.
     /// Skips the download if the same file is already fully downloaded.
@@ -139,12 +282,5 @@ public enum WineRuntimeService {
         let result = try await Shell.runChecked(binary.path, ["--version"])
         let lastLine = result.output.split(separator: "\n").last.map(String.init)
         return lastLine ?? result.output
-    }
-
-    public static func save(_ info: RuntimeInfo) throws {
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-        let data = try encoder.encode(info)
-        try data.write(to: AppPaths.runtimeInfoFile, options: .atomic)
     }
 }
