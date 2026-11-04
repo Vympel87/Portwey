@@ -17,6 +17,7 @@ struct LibraryView: View {
     @Environment(GameLibrary.self) private var library
     @Environment(GameRunner.self) private var runner
     @Environment(SetupManager.self) private var setup
+    @Environment(AppState.self) private var appState
 
     @State private var path: [UUID] = []
     @State private var searchText = ""
@@ -108,6 +109,7 @@ struct LibraryView: View {
                         Label("Add game", systemImage: "plus")
                     }
                     .disabled(isImportBusy)
+                    .help("Add Game (⌘O)")
                 }
             }
             .navigationDestination(for: UUID.self) { id in
@@ -139,6 +141,19 @@ struct LibraryView: View {
         } message: {
             Text(importError ?? "")
         }
+        // ⌘O from the menu, also when it was pressed on another page.
+        .onAppear {
+            handleAddGameRequest()
+        }
+        .onChange(of: appState.addGameRequested) {
+            handleAddGameRequest()
+        }
+    }
+
+    private func handleAddGameRequest() {
+        guard appState.addGameRequested else { return }
+        appState.addGameRequested = false
+        isImporting = true
     }
 
     // MARK: - Importing

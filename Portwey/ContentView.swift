@@ -38,4 +38,6 @@ struct ContentView: View {
         .environment(SetupManager())
         .environment(library)
         .environment(GameRunner(library: library))
+        .environment(SteamManager(library: library))
+        .environment(AppState())
 }

@@ -10,11 +10,13 @@ enum SidebarItem: Hashable {
 }
 
 struct MainView: View {
-    @State private var selection: SidebarItem? = .library
+    @Environment(AppState.self) private var appState
 
     var body: some View {
+        @Bindable var appState = appState
+
         NavigationSplitView {
-            List(selection: $selection) {
+            List(selection: $appState.sidebarSelection) {
                 Section("Portwey") {
                     Label("Library", systemImage: "square.grid.2x2")
                         .tag(SidebarItem.library)
@@ -34,7 +36,7 @@ struct MainView: View {
                     .padding(12)
             }
         } detail: {
-            switch selection ?? .library {
+            switch appState.sidebarSelection ?? .library {
             case .library:
                 LibraryView()
             case .steam:
